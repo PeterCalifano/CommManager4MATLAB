@@ -7,6 +7,18 @@ classdef CommManager < handle
 % external TCP servers. See section "methods" for details.
 % -------------------------------------------------------------------------------------------------------------
 %% DATA MEMBERS
+% charServerAddress
+% ui32ServerPort
+% dCommTimeout
+% objtcpClient
+% recvDataBuffer = 0;
+% ui8CommMode = 0;
+% bufferToWrite = 0;
+% recvDataStruct = struct();
+% dataStructToWrite = struct();
+% bUSE_PYTHON_PROTO = true;
+% bUSE_CPP_PROTO = false;
+% bCommManagerReady = false;
 % -------------------------------------------------------------------------------------------------------------
 %% METHODS
 % CommManager
@@ -22,6 +34,7 @@ classdef CommManager < handle
 % 20-06-2024        Pietro Califano      Debug and updated; Added disconnection method.
 % 14-11-2024        Pietro Califano      Updated class for improved generality; removed code specific to
 %                                        robots-API usage (moved to RobotsCommManager subclass)
+% 24-11-2024        Pietro Califano      Moved to dedicated repo on GitHub for new course: CommManager4MATLAB
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
