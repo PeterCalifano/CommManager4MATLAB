@@ -34,7 +34,7 @@ classdef CommManager < handle
 % 20-06-2024        Pietro Califano      Debug and updated; Added disconnection method.
 % 14-11-2024        Pietro Califano      Updated class for improved generality; removed code specific to
 %                                        robots-API usage (moved to RobotsCommManager subclass)
-% 24-11-2024        Pietro Califano      Moved to dedicated repo on GitHub for new course: CommManager4MATLAB
+% 24-11-2024        Pietro Califano      Moved to dedicated repo on GitHub for new dev. course: CommManager4MATLAB
 % -------------------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % [-]
@@ -62,13 +62,13 @@ classdef CommManager < handle
     end
 
     %% PUBLIC METHODS
-    methods (Access=public)
+    methods (Access = public)
         % CONSTRUCTOR
-        function self = CommManager(i_charServerAddress, i_ui32ServerPort, i_dCommTimeout, kwargs)
+        function self = CommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
-                i_charServerAddress (1,:) {ischar, isstring} 
-                i_ui32ServerPort    (1,1) uint32   {isscalar}
-                i_dCommTimeout      (1,1) double  {isscalar} = 10     
+                charServerAddress (1,:) {ischar, isstring} 
+                ui32ServerPort    (1,1) uint32   {isscalar}
+                dCommTimeout      (1,1) double  {isscalar} = 10     
             end
 
             arguments
@@ -80,9 +80,9 @@ classdef CommManager < handle
             disp('Creating communication manager object...')
 
             % Assign server address
-            self.charServerAddress = i_charServerAddress;
-            self.ui32ServerPort    = i_ui32ServerPort;
-            self.dCommTimeout      = i_dCommTimeout;
+            self.charServerAddress = charServerAddress;
+            self.ui32ServerPort    = ui32ServerPort;
+            self.dCommTimeout      = dCommTimeout;
 
             % Assign server properties
             self.bUSE_PYTHON_PROTO = kwargs.bUSE_PYTHON_PROTO;
