@@ -74,7 +74,7 @@ classdef TensorCommManager < CommManager
             self.assertInit();
 
             % Read data incoming from TCP server
-           [ui32RecvBytes, ui8RecvDataBuffer, self] = self.ReadBuffer@CommManager(ui8DataBuffer, bAddDataSize);
+           [ui32RecvBytes, ui8RecvDataBuffer, self] = self.ReadBuffer@CommManager();
 
             % Convert received buffer into dTensorArray with "adaptive size convention"
             dTensorArray = Bytes2TensorArray(ui32RecvBytes, ui8RecvDataBuffer);
