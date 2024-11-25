@@ -1,5 +1,9 @@
-function [castedDataCell] = typecastAll(dataCell)
+function [castedDataCell] = typecastAllCells(dataCell)
+    arguments
+        dataCell cell 
+    end
 %% PROTOTYPE
+% [castedDataCell] = typecastAllCells(dataCell)
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
