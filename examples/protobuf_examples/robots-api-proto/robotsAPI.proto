@@ -1,0 +1,60 @@
+// Protobuf messages prototype definition, first created by PeterC 23-05-2024
+syntax="proto3";
+
+package robotsAPI; // Package declaration 
+
+enum MsgType // Enumeration type for message unique ID to inform about which message is sent
+{
+    AXIS_CONFIG = 0;
+    CTRLGROUP_CURRENTPOS = 1;
+    CTRLGROUP_INFO = 2;
+}
+
+
+// ENVELOPE MSG (this is what is sent all the time)
+message MsgCarrier {
+    MsgType typeof_msg = 1;
+    bytes payload_msg = 2;
+}
+
+
+// Auxiliary messages (not intended to be sent standalone)
+message PoseData
+{
+    uint32 coord_type = 1;
+    uint32 tool_number = 2;
+    uint32 user_frame = 3;
+    repeated double attitudeMatrix = 4;
+    repeated double positionVec = 5;
+}
+
+message PositionData
+{   
+    uint32 coord_type = 1;
+    uint32 tool_number = 2;
+    uint32 user_frame = 3;
+    repeated double positionDataArray = 4;
+    repeated double positionVec = 5;
+
+}
+
+message AxisConfigData{}
+
+// Main messages (wrapped in envelope message and tagged with type)
+
+message CtrlGroupCurrentPosData {
+    uint32 controlgroup_id = 1; 
+    PositionData currentPosData = 2;
+}
+
+message CtrlGroupData {
+
+    uint32 controlgroup_id = 1; // NOTE: Consider that fields up to 15 requires 1 byte less that >15.
+    uint32 userframe_id = 2;
+    bool isHomeInitialized = 3;
+
+    PositionData currentPosData = 4;
+    PositionData homePosData = 5;
+    PositionData calibrationPosData = 6;
+
+};
