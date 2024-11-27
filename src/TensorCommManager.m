@@ -13,6 +13,7 @@ classdef TensorCommManager < CommManager
     % -------------------------------------------------------------------------------------------------------------
     %% CHANGELOG
     % 24-11-2024        Pietro Califano      Defined as subclass of CommManager to tailor it for PyTorchAutoForge
+    % 25-11-2024        Pietro Califano      Implemented methods to convert tensor data to bytes and viceversa
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
