@@ -95,8 +95,11 @@ classdef TensorCommManager < CommManager
                 % Then concat all messages into a single buffer
                 
             else
+                % Read bufer length
+                ui32RecvMessageBytes = uint32(ui8RecvDataBuffer(1:4));
+
                 % Convert received buffer into dTensorArray with "tensor convention"
-                dTensorArray = Bytes2TensorArray(ui32RecvBytes, ui8RecvDataBuffer);
+                dTensorArray = Bytes2TensorArray(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
             end
             
             
@@ -115,15 +118,15 @@ classdef TensorCommManager < CommManager
     end
     
     methods (Static, Access = public)
-        function dTensorArray = Bytes2TensorArray(ui32RecvBytes, ui8DataBuffer)
+        function dTensorArray = Bytes2TensorArray(ui32RecvMessageBytes, ui8DataBuffer)
             % Static method to convert buffer of bytes to tensor array (N-dim array) (format tailored for PyTorchAutoForge)
             arguments
-                ui32RecvBytes (1, 1) uint32 {isscalar}
+                ui32RecvMessageBytes (1, 1) uint32 {isscalar}
                 ui8DataBuffer (1, :) uint8  {isvector}
             end
             
             % Read bytes indicating how many sizes are to unpack
-            i32TensorDims = typecast(ui8DataBuffer(1:4), 'int32');
+            i32TensorDims = typecast(ui8DataBuffer(1:4), 'uint32');
             
             % Create shape array
             i32TensorShape = zeros(1, i32TensorDims, "uint32");
@@ -136,7 +139,7 @@ classdef TensorCommManager < CommManager
             idPtr = 4*i32TensorDims + 4; % TBC
             
             % Check ptr is lower than total bytes
-            assert(idPtr < ui32RecvBytes, 'ERROR: Pointer exceeds total bytes.')
+            assert(idPtr < ui32RecvMessageBytes, 'ERROR: Pointer exceeds total bytes.')
             
             % Get bytes of tensor data from buffer and do typecasting
             dTensorBuffer = typecast(ui8DataBuffer(idPtr+1:end), 'single');
@@ -190,6 +193,10 @@ classdef TensorCommManager < CommManager
             
             % Construct data buffer
             ui8DataBuffer = [ui8TensorDims, ui8TensorShape, ui8TensorBuffer];
+
+            % Add message length to buffer
+            ui32MessageBytes = uint32(length(ui8DataBuffer));
+            ui8DataBuffer = [typecast(ui32MessageBytes, 'uint8'), ui8DataBuffer];
             
         end
     end
