@@ -24,7 +24,7 @@ classdef TensorCommManager < CommManager
     %% Function code
     
     properties (SetAccess = protected, GetAccess = public)
-        
+        bMULTI_TENSOR = false;
     end
     
     methods
@@ -45,7 +45,7 @@ classdef TensorCommManager < CommManager
             self = self@CommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
                 'bUSE_PYTHON_PROTO', kwargs.bUSE_PYTHON_PROTO, 'bUSE_CPP_PROTO', kwargs.bUSE_CPP_PROTO, 'bInitInPlace', kwargs.bInitInPlace);
             
-            self.bMULTI_TENSOR = bMULTI_TENSOR;
+            self.bMULTI_TENSOR = kwargs.bMULTI_TENSOR;
         end
         
         % PUBLIC METHODS
@@ -96,7 +96,7 @@ classdef TensorCommManager < CommManager
                 
             else
                 % Read bufer length
-                ui32RecvMessageBytes = uint32(ui8RecvDataBuffer(1:4));
+                ui32RecvMessageBytes = typecast(ui8RecvDataBuffer(1:4), 'uint32');
 
                 % Convert received buffer into dTensorArray with "tensor convention"
                 dTensorArray = self.Bytes2TensorArray(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
@@ -186,7 +186,11 @@ classdef TensorCommManager < CommManager
             
             % Convert tensor data to bytes
             ui8TensorBuffer = typecast(fTensorBuffer, 'uint8');
-            
+               
+            if iscolumn(ui8TensorBuffer)
+                ui8TensorBuffer = ui8TensorBuffer';
+            end
+
             % Convert tensor shape to bytes
             ui8TensorDims = typecast(ui32TensorDims, 'uint8');
             ui8TensorShape = typecast(ui32TensorShape, 'uint8');
