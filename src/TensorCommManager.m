@@ -65,7 +65,7 @@ classdef TensorCommManager < CommManager
                 % Then concat all messages into a single buffer
                 
             else
-                ui8DataBuffer = TensorArray2Bytes(dTensorArray);
+                ui8DataBuffer = self.TensorArray2Bytes(dTensorArray);
                 
             end
             
@@ -99,7 +99,7 @@ classdef TensorCommManager < CommManager
                 ui32RecvMessageBytes = uint32(ui8RecvDataBuffer(1:4));
 
                 % Convert received buffer into dTensorArray with "tensor convention"
-                dTensorArray = Bytes2TensorArray(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
+                dTensorArray = self.Bytes2TensorArray(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
             end
             
             
