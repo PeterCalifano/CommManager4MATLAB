@@ -54,7 +54,7 @@ classdef TensorCommManager < CommManager
         function writtenBytes = WriteBuffer(self, inTensorArray)
             arguments
                 self
-                inTensorArray (:,:)   {mustBeA(inTensorArray, ["cell","double","uint8","single"])}
+                inTensorArray {mustBeA(inTensorArray, ["cell","double","uint8","single"])}
             end
             
             self.assertInit();
@@ -83,13 +83,14 @@ classdef TensorCommManager < CommManager
             [ui32RecvBytes, ui8RecvDataBuffer, self] = self.ReadBuffer@CommManager();
             fprintf('\nRead %d bytes. Processing message...\n', ui32RecvBytes);
 
-            % Read bufer length
-            ui32RecvMessageBytes = typecast(ui8RecvDataBuffer(1:4), 'uint32');
 
             if self.bMULTI_TENSOR == true
-                outTensorArray = self.Bytes2MultiTensor(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
+                outTensorArray = self.Bytes2MultiTensor(ui8RecvDataBuffer);
                 return
             else
+                % Read buffer length
+                ui32RecvMessageBytes = typecast(ui8RecvDataBuffer(1:4), 'uint32');
+
                 % Convert received buffer into dTensorArray with "tensor convention"
                 outTensorArray = self.Bytes2TensorArray(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
                 return
@@ -160,6 +161,8 @@ classdef TensorCommManager < CommManager
             % Get bytes of tensor data from buffer and do typecasting
             dTensorBuffer = typecast(ui8DataBuffer(idPtr+1:end), 'single');
             
+            assert(length(dTensorBuffer) <= length(ui8DataBuffer(idPtr+1:end)), 'ACHTUNG: message typecast failed!');
+
             % Reshape tensor data according to i32TensorShape
             dTensorArray = reshape(dTensorBuffer, i32TensorShape);
             
@@ -246,9 +249,8 @@ classdef TensorCommManager < CommManager
         end
     
     
-        function [cellTensorArrays, cellTensorShapes] = Bytes2MultiTensor(ui32RecvMessageBytes, ui8DataBuffer)
+        function [cellTensorArrays, cellTensorShapes] = Bytes2MultiTensor(ui8DataBuffer)
             arguments
-                ui32RecvMessageBytes (1,1) uint32 {isscalar, isa(ui32RecvMessageBytes, 'uint32')}
                 ui8DataBuffer        (1,:) uint8 {isscalar, isa(ui8DataBuffer, 'uint8')}
             end
             %% SIGNATURE
@@ -281,24 +283,24 @@ classdef TensorCommManager < CommManager
             cellTensorArrays = cell(1, ui32NumOfTensors);
             cellTensorShapes = cell(1, ui32NumOfTensors);
 
-            ui64UnpackPtr = uint64(1);
+            ui64UnpackPtr = uint64(5);
 
             % Unpack each message separately
             for idMsg = 1:ui32NumOfTensors
 
                 % # Get length of tensor message
                 % tensorMessageLength = int.from_bytes(inputDataBuffer[ptrStart:ptrStart+4], self.ENDIANNESS) # In bytes
-                ui32TensorMessageLength = typecast(ui8DataBuffer(ui64UnpackPtr:ui64UnpackPtr+4), 'uint32');
+                ui32TensorMessageLength = typecast(ui8DataBuffer(ui64UnpackPtr:ui64UnpackPtr+3), 'uint32');
 
-                fprint("Processing Tensor message of length: %d", ui32TensorMessageLength)
+                fprintf("\nProcessing Tensor message of length: %d\n", ui32TensorMessageLength)
 
                 % # Extract sub-message from buffer
                 % subTensorMessage = inputDataBuffer[ptrStart+4:(ptrStart + 4) + tensorMessageLength] # Extract sub-message in bytes
-                ui8SubTensorMessage = ui8DataBuffer(ui64UnpackPtr + 4 : (ui64UnpackPtr + 4) + uint64(ui32TensorMessageLength));
+                ui8SubTensorMessage = ui8DataBuffer(ui64UnpackPtr + 4 : ui64UnpackPtr + 3 + uint64(ui32TensorMessageLength));
 
                 % # Call function to convert each tensor message to tensor
                 % tensor, tensorShape = self.BytesBufferToTensor(subTensorMessage)
-                [dTensorArray, ~, i32TensorShape] = self.Bytes2TensorArray(ui32TensorMessageLength, ui8SubTensorMessage);
+                [dTensorArray, ~, i32TensorShape] = TensorCommManager.Bytes2TensorArray(ui32TensorMessageLength, ui8SubTensorMessage);
 
                 % Append to cell
                 cellTensorArrays{idMsg} = dTensorArray;
@@ -315,7 +317,7 @@ classdef TensorCommManager < CommManager
 
         function [ui8DataBuffer, ui32TensorDims, ui32TensorShapes] = MultiTensor2Bytes(cellTensorArrays, kwargs)
             arguments
-                cellTensorArrays (:,:)   {mustBeA(cellTensorArrays, ["cell","double","uint8","single"])}
+                cellTensorArrays {mustBeA(cellTensorArrays, ["cell","double","uint8","single"])}
             end
             arguments
                 kwargs.ui32MAX_BUFFER_SIZE (1,1) uint32 {isnumeric, isscalar} = 1E8
@@ -350,29 +352,29 @@ classdef TensorCommManager < CommManager
             % Get number of tensors in cell
             ui32NumOfTensors = uint32(length(cellTensorArrays));
             
-            ui8DataBuffer = nan(1, kwargs.ui32MAX_BUFFER_SIZE, 'uint8');
+            ui8DataBuffer = zeros(1, kwargs.ui32MAX_BUFFER_SIZE, 'uint8');
             ui64BufferAllocPtr = uint64(1);
 
             ui32TensorDims   = cell(1, ui32NumOfTensors);
             ui32TensorShapes = cell(1, ui32NumOfTensors);
-
+            
+            ui64TmpMsgEndPtr = uint64(0);
+            
             % Build multi-tensor message
             for idMsg = 1:ui32NumOfTensors
 
-                tmpMsgBuffer = self.TensorArray2Bytes( cellTensorArrays{idMsg} );
-                ui64TmpMsgEndPtr = ui64BufferAllocPtr + uint64(length(tmpMsgBuffer));
+                tmpMsgBuffer = TensorCommManager.TensorArray2Bytes( cellTensorArrays{idMsg} );
+                ui64TmpMsgEndPtr = ui64TmpMsgEndPtr + uint64(length(tmpMsgBuffer));
 
                 % Allocate message
                 ui8DataBuffer(ui64BufferAllocPtr : ui64TmpMsgEndPtr) =  tmpMsgBuffer;
                 
                 % Update allocation ptr
-                ui64BufferAllocPtr = ui64TmpMsgEndPtr;
+                ui64BufferAllocPtr = ui64TmpMsgEndPtr + 1;
             end
 
             % Remove unused bytes
-            ui8DataBuffer = ui8DataBuffer(1:ui64BufferAllocPtr);
-            % Check there is no nan 
-            assert( not( any(isnan(ui8DataBuffer)) ), 'ACHTUNG: stopping due to nan detected in serialized message' );
+            ui8DataBuffer = ui8DataBuffer(1:ui64BufferAllocPtr-1);
             
             % Add number of tensors to message header
             ui8DataBuffer = [typecast(ui32NumOfTensors, 'uint8'), ui8DataBuffer];
