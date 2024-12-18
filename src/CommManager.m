@@ -181,7 +181,9 @@ classdef CommManager < handle
             % TODO: add "multi message mode" --> input is a cell containing multiple datastructs to be serialized as different messages
             self.assertInit();
             if bSplitMessages == false
-                ui8SerializedBuffer = dumpmsgpack(inDataStruct);        
+                ui8SerializedBuffer = dumpmsgpack(inDataStruct);      
+            else
+                error('Not implemented yet!');  
             end    
         end
         
