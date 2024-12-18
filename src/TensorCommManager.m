@@ -51,24 +51,18 @@ classdef TensorCommManager < CommManager
         end
         
         % PUBLIC METHODS
-        function writtenBytes = WriteBuffer(self, dTensorArray)
+        function writtenBytes = WriteBuffer(self, inTensorArray)
             arguments
-                self          (1,1)
-                dTensorArray   double
+                self
+                inTensorArray (:,:)   {mustBeA(inTensorArray, ["cell","double","uint8","single"])}
             end
             
             self.assertInit();
-            
-            
-            % TODO
+                        
             if self.bMULTI_TENSOR == true
-                error('NOT IMPLEMENTED YET')
-                % TODO: convert everything in a cell or struct into multiple single messages with "tensor convention"
-                % Then concat all messages into a single buffer
-                
+                ui8DataBuffer = self.MultiTensor2Bytes(inTensorArray);
             else
-                ui8DataBuffer = self.TensorArray2Bytes(dTensorArray);
-                
+                ui8DataBuffer = self.TensorArray2Bytes(inTensorArray);                
             end
             
             % Convert dTensorArray into ui8DataBuffer with "tensor convention"
@@ -82,27 +76,24 @@ classdef TensorCommManager < CommManager
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Method to read data to buffer
-        function [dTensorArray, self] = ReadBuffer(self)
+        function [outTensorArray, self] = ReadBuffer(self)
             
             self.assertInit();
-            
             % Read data incoming from TCP server
             [ui32RecvBytes, ui8RecvDataBuffer, self] = self.ReadBuffer@CommManager();
             fprintf('\nRead %d bytes. Processing message...\n', ui32RecvBytes);
 
-            if self.bMULTI_TENSOR == true
-                error('NOT IMPLEMENTED YET')
-                % TODO: convert everything in a cell or struct into multiple single messages with "tensor convention"
-                % Then concat all messages into a single buffer
-                
-            else
-                % Read bufer length
-                ui32RecvMessageBytes = typecast(ui8RecvDataBuffer(1:4), 'uint32');
+            % Read bufer length
+            ui32RecvMessageBytes = typecast(ui8RecvDataBuffer(1:4), 'uint32');
 
+            if self.bMULTI_TENSOR == true
+                outTensorArray = self.Bytes2MultiTensor(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
+                return
+            else
                 % Convert received buffer into dTensorArray with "tensor convention"
-                dTensorArray = self.Bytes2TensorArray(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
+                outTensorArray = self.Bytes2TensorArray(ui32RecvMessageBytes, ui8RecvDataBuffer(5:end));
+                return
             end
-            
             
         end
         
