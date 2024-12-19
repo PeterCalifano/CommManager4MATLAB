@@ -15,7 +15,8 @@ classdef TensorCommManager < CommManager
     % 24-11-2024        Pietro Califano      Defined as subclass of CommManager to tailor it for PyTorchAutoForge
     % 25-11-2024        Pietro Califano      Implemented methods to convert tensor data to bytes and viceversa
     % 17-12-2024        Pietro Califano      Unit testing of TENSOR mode communication (PASSED)
-    % 18-12-2024        Pietro Califano      Implementation of MULTI-TENSOR mode and unit testing
+    % 18-12-2024        Pietro Califano      Implementation of MULTI-TENSOR mode and unit testing, added
+    %                                        msg-pack for serialization/de-serialization
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
@@ -110,6 +111,7 @@ classdef TensorCommManager < CommManager
         
     end
     
+    %% STATIC methods 
     methods (Static, Access = public)
         function [dTensorArray, i32TensorDims, i32TensorShape] = Bytes2TensorArray(ui32RecvMessageBytes, ui8DataBuffer)
             arguments
@@ -359,7 +361,7 @@ classdef TensorCommManager < CommManager
             ui32TensorShapes = cell(1, ui32NumOfTensors);
             
             ui64TmpMsgEndPtr = uint64(0);
-            
+
             % Build multi-tensor message
             for idMsg = 1:ui32NumOfTensors
 
