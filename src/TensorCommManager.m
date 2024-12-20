@@ -16,7 +16,7 @@ classdef TensorCommManager < CommManager
     % 25-11-2024        Pietro Califano      Implemented methods to convert tensor data to bytes and viceversa
     % 17-12-2024        Pietro Califano      Unit testing of TENSOR mode communication (PASSED)
     % 18-12-2024        Pietro Califano      Implementation of MULTI-TENSOR mode and unit testing, added
-    %                                        msg-pack for serialization/de-serialization
+    %                                        msg-pack focoper serialization/de-serialization
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
