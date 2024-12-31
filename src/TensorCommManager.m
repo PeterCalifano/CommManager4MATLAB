@@ -166,8 +166,12 @@ classdef TensorCommManager < CommManager
             assert(length(dTensorBuffer) <= length(ui8DataBuffer(idPtr+1:end)), 'ACHTUNG: message typecast failed!');
 
             % Reshape tensor data according to i32TensorShape
-            dTensorArray = reshape(dTensorBuffer, i32TensorShape);
-            
+            if not(isscalar(i32TensorShape))
+                dTensorArray = reshape(dTensorBuffer, i32TensorShape);
+            else
+                dTensorArray = dTensorBuffer;
+            end
+
             % Squeeze tensor if any dimension is 1
             if any(i32TensorShape == 1)
                 dTensorArray = squeeze(dTensorArray);
