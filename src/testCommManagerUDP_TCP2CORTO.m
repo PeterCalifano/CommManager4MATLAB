@@ -31,18 +31,48 @@ CORTO_pyInterface_path = strcat(CORTO_pyInterface_path, charScriptName);
 charStartBlenderCommand = sprintf('bash script/CORTO_interfaces/StartBlenderServer.sh -m "%s" -p "%s"', ...
     BlenderModelPath, CORTO_pyInterface_path);
 
-system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
+% system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
 charStartBlenderCommand = strcat(charStartBlenderCommand, " > /tmp/blender_pipe &");
 
 % Execute the command
-[~, result] = system(charStartBlenderCommand);
-disp(result);
+% [~, result] = system(charStartBlenderCommand);
 
 [status, result] = system('ps aux | grep blender'); % Check if process is running
 disp(result);
 
 %% 
 % TODO (PC): add code to test UDP-TCP server with CORTO interface
+
+% Compose and cast buffer
+dBuffer = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat, dBody2Pos, dBody2Quat];
+ui8Buffer = typecast(dBuffer, 'uint8');
+
+% Create CommManager object
+charServerAddress = 'localhost';
+ui32ServerPort = [30001, 51000]; % [TCP, UDP]
+ui32TargetPort = 51001;
+dCommTimeout = 20;
+objCommManager = CommManager(charServerAddress, ui32ServerPort, ...
+    dCommTimeout, "bLittleEndianOrdering", false, ...
+    "enumCommMode", "UDP_TCP", "ui32RecvTCPsize", 8*4*2048*1536);
+
+% Test initialization
+objCommManager.Initialize();
+
+% Test write
+writtenBytes = objCommManager.WriteBuffer(ui8Buffer, false, ui32TargetPort);
+
+% Test read
+[recvBytes, recvDataBuffer, self] = objCommManager.ReadBuffer(); % TODO (PC) check endianness of recv
+
+% Try to swap bytes?
+% bytes = read(tcpClient, numBytes, 'uint8');
+% data = typecast(uint8(bytes), 'single');
+% recvDataBuffer = swapbytes(recvDataBuffer); % NOT NEEDED 
+
+% Cast buffer to double and display image
+dImgRGB = UnpackImageFromCORTO(recvDataVector);
+imshow(dImgRGB);
 
 return
 %% Code to kill Blender processes
