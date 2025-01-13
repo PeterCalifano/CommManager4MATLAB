@@ -48,10 +48,13 @@ classdef CommManager < handle
     %% PUBLIC DATA MEMBERS
     
     properties (SetAccess = protected, GetAccess = public)
+        % TODO (PC) improve data members definitions and order!
         charServerAddress
         ui32ServerPort
         dCommTimeout
-        objtcpClient
+        objTCPclient
+        objUDPport
+        enumCommMode
         recvDataBuffer = 0;
         ui8CommMode = 0;
         bufferToWrite = 0;
@@ -67,24 +70,26 @@ classdef CommManager < handle
         % CONSTRUCTOR
         function self = CommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
-                charServerAddress (1,:) {ischar, isstring}
-                ui32ServerPort    (1,1) uint32   {isscalar}
-                dCommTimeout      (1,1) double  {isscalar} = 10
+                charServerAddress (1,:) string          {ischar, isstring} 
+                ui32ServerPort    (1,1) uint32          {isscalar}
+                dCommTimeout      (1,1) double          {isscalar} = 10     
             end
             
             arguments
-                kwargs.bUSE_PYTHON_PROTO  (1,1) logical {islogical} = true
-                kwargs.bUSE_CPP_PROTO     (1,1) logical {islogical} = false
-                kwargs.bInitInPlace       (1,1) logical {islogical} = false
+                kwargs.bUSE_PYTHON_PROTO    (1,1) logical       {islogical} = true
+                kwargs.bUSE_CPP_PROTO       (1,1) logical       {islogical} = false
+                kwargs.bInitInPlace         (1,1) logical       {islogical} = false
+                kwargs.enumCommMode         (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.TCP
             end
             
             disp('Creating communication manager object...')
             
             % Assign server address
-            self.charServerAddress = charServerAddress;
-            self.ui32ServerPort    = ui32ServerPort;
-            self.dCommTimeout      = dCommTimeout;
-            
+            self.charServerAddress  = charServerAddress;
+            self.ui32ServerPort     = ui32ServerPort;
+            self.dCommTimeout       = dCommTimeout;
+            self.enumCommMode       = kwargs.enumCommMode;
+
             % Assign server properties
             self.bUSE_PYTHON_PROTO = kwargs.bUSE_PYTHON_PROTO;
             self.bUSE_CPP_PROTO    = kwargs.bUSE_CPP_PROTO;
@@ -92,22 +97,49 @@ classdef CommManager < handle
             if kwargs.bInitInPlace
                 self = self.Initialize();
             end
-            
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Method to initialize tcpclient object to establish connection
         function self = Initialize(self)
             
-            fprintf('\nInitializing communication calling tcpclient with HOST: %s, PORT: %s\n', ...
-                self.charServerAddress, num2str(self.ui32ServerPort));
-            
-            self.objtcpClient = tcpclient(self.charServerAddress, self.ui32ServerPort, ...
-                "Timeout", self.dCommTimeout);
-            
-            self.bCommManagerReady = true;
-            fprintf('Connection established corrected.');
-            
+            switch self.enumCommMode
+
+                case EnumCommMode.TCP
+                    % TCP-TCP communication
+                    fprintf('\nInitializing communication calling tcpclient with HOST: %s, PORT: %s\n', ...
+                        self.charServerAddress, num2str(self.ui32ServerPort));
+
+                    self.objTCPclient = tcpclient(self.charServerAddress, self.ui32ServerPort, ...
+                        "Timeout", self.dCommTimeout);
+
+                    self.bCommManagerReady = true;
+                    fprintf('Connection established correctly.');
+
+                case EnumCommMode.UDP
+                    % UDP-UDP communication
+                    error('Not implemented yet')
+
+                    % TODO (PC)
+
+                case EnumCommMode.UDP_TCP
+                    % UDP-TCP communication
+                    error('Not implemented yet')
+                    
+                    % TODO (PC)
+                    fprintf('\nInitializing communication calling tcpclient with HOST: %s, PORT: %s\n', ...
+                        self.charServerAddress, num2str(self.ui32ServerPort));
+
+                    self.objTCPclient = tcpclient(self.charServerAddress, self.ui32ServerPort, ...
+                        "Timeout", self.dCommTimeout);
+
+                    self.bCommManagerReady = true;
+                    fprintf('Connection established correctly.');
+
+            end
+
+
+
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -131,13 +163,13 @@ classdef CommManager < handle
                 dataLength = typecast(uint32(length(dataBuffer)), 'uint8');
                 dataBuffer = [dataLength, dataBuffer];
             end
-            
-            write(self.objtcpClient, dataBuffer, "uint8");
-            writtenBytes = self.objtcpClient.NumBytesAvailable;
-            
+
+            write(self.objTCPclient, dataBuffer, "uint8");
+            writtenBytes = self.objTCPclient.NumBytesAvailable;
+
             % Flush data from buffer
-            flush(self.objtcpClient, "output");
-            
+            flush(self.objTCPclient, "output");
+
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -147,17 +179,17 @@ classdef CommManager < handle
             self.assertInit();
             
             % Read first 4 bytes to get message buffer length
-            recvBytes   = read(self.objtcpClient, 4, 'uint8');
+            recvBytes   = read(self.objTCPclient, 4, 'uint8');
             recvBytes   = typecast(recvBytes, 'uint32');
             
             % Read message buffer
-            recvDataBuffer = read(self.objtcpClient, recvBytes, 'uint8');
-            
+            recvDataBuffer = read(self.objTCPclient, recvBytes, 'uint8');
+
             % Allocate buffer to property
             self.recvDataBuffer = recvDataBuffer;
             
             % Flush data from buffer
-            flush(self.objtcpClient, "input");
+            flush(self.objTCPclient, "input");
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -196,7 +228,15 @@ classdef CommManager < handle
             end
             
             self.assertInit();
-            outDataStruct = parsemsgpack(ui8SerializedBuffer);
+
+            error('NOT IMPLEMENTED YET')
+            self.recvDataStruct = o_objdecodedMessage; % TODO
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Method to disconnect the client
+        function [self] = Disconnect(self)
+            self.objTCPclient = 0;
         end
     end
     
