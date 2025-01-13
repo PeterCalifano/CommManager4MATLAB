@@ -36,7 +36,7 @@ classdef CommManager < handle
     %                                       robots-API usage (moved to RobotsCommManager subclass)
     % 24-11-2024        Pietro Califano     Moved to dedicated repo on GitHub for new dev. course: CommManager4MATLAB
     % 18-12-2024        Pietro Califano     Added methods to use msg-pack library for serialization/de-serialization
-    % 13-01-2025        Pietro Califano     Add functionalities for UDP servers  
+    % 13-01-2025        Pietro Califano     Add functionalities to support UDP communications
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
@@ -54,7 +54,7 @@ classdef CommManager < handle
         ui32ServerPort
         dCommTimeout
         enumCommMode
-        ui8CommMode = 0;
+        ui8CommMode = 0; % TODO (PC) check if still needed by subclasses
         bCommManagerReady       = false;
         bLittleEndianOrdering   = true;
         charByteOrdering        = "little-ending";
@@ -85,9 +85,9 @@ classdef CommManager < handle
         % CONSTRUCTOR
         function self = CommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
-                charServerAddress (1,:) string          {ischar, isstring} 
-                ui32ServerPort    (1,:) uint32          {isvector, isnumeric}
-                dCommTimeout      (1,1) double          {isscalar, isnumeric} = 10     
+                charServerAddress (1,:) string          {ischar, isstring}  
+                ui32ServerPort    (1,:) uint32          {isvector, isnumeric} 
+                dCommTimeout      (1,1) double          {isscalar, isnumeric} = 20     
             end
             
             arguments
@@ -99,7 +99,7 @@ classdef CommManager < handle
                 kwargs.dOutputDatagramSize      (1,1) double        {isscalar, isnumeric} = 512     
                 kwargs.ui32TargetPort           (1,1) uint32        {isscalar, isnumeric} = 0
                 kwargs.charTargetAddress        (1,:) string        {isscalar, isnumeric} = "127.0.0.1"
-                kwargs.ui32RecvTCPsize          (1,1) int32         {isscalar, isnumeric} = -1;
+                kwargs.i32RecvTCPsize           (1,1) int32         {isscalar, isnumeric} = -1; 
             end
             
             fprintf('\nCreating communication manager object... \n')
@@ -114,7 +114,7 @@ classdef CommManager < handle
             self.ui32TargetPort     = kwargs.ui32TargetPort;
 
             % Fixed size buffer for TCP recv
-            self.i32RecvTCPsize = kwargs.ui32RecvTCPsize;
+            self.i32RecvTCPsize = kwargs.i32RecvTCPsize;
 
             % Assign server properties
             self.bUSE_PYTHON_PROTO      = kwargs.bUSE_PYTHON_PROTO;
@@ -288,12 +288,17 @@ classdef CommManager < handle
                         end
 
                         if recvBytes == 0
-                            warning('Read recv buffer length from remote server, but equal to 0. Something may have gone wrong or did you forget to fix "ui32RecvTCPsize" field?');
+                            warning('Read recv buffer length from remote server, but equal to 0. Something may have gone wrong or did you forget to fix "i32RecvTCPsize" field?');
                         end
 
+                    elseif self.i32RecvTCPsize == -5 % Special "Eager" MODE: get all bytes
+                        % TODO (PC) not easy at it may seem: read is blocking, but if there exists latency
+                        % between when this cliend reaches it and the time the server writes something to
+                        % buffer, this mode would break apart entirely. 
                     else
                         recvBytes = self.i32RecvTCPsize; % Use specified size to receive
                     end
+
                     assert(recvBytes >= 0, 'Error: Received/set message buffer length is invalid (zero or negative).');
 
                     % Read message buffer
@@ -313,7 +318,7 @@ classdef CommManager < handle
                     disp(ME.message);
                     if contains(ME.identifier, 'timeout', 'IgnoreCase', true)
                         fprintf(['\nDo you need to recv a fixed size buffer of known size and/or the first 4 bytes do not specify the length? \n' ...
-                            'Please specify "ui32RecvTCPsize" kwarg at class instantiation to enable this TCP recv mode!.\n']);
+                            'Please specify "i32RecvTCPsize" kwarg at class instantiation to enable this TCP recv mode!.\n']);
                     end
                     error(ME)
                 end

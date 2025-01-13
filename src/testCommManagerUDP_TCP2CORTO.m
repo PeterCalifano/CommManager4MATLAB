@@ -2,13 +2,14 @@ close all
 clear
 clc
 
-%% Unit test for CORTO interfaces and CommManager (S5 Didymos Milani scenario)
+% Unit test for CORTO interfaces and CommManager (S5 Didymos Milani scenario)
 % SUN:   POS [-1.87979488e+08  2.98313209e+04  5.99584851e+07] - Q [ 0.57104144  0.41702718 -0.41731124 -0.57083389]
 % SC:    POS [0. 0. 0.] - Q [1. 0. 0. 0.]
 % BODY (0):   POS: [  0.16706893   0.0235506  -13.93270439] - Q [-0.05240883 -0.20821087  0.76502471  0.60715537]
 % BODY (1):   POS: [  0.96841929   0.38199128 -13.145638  ] - Q [-0.17513088 -0.35985445  0.70648485  0.58370726]
 
-%% Test data from milani-gnc simulation
+%% Load_test_data
+% From milani-gnc simulation
 dSunPos  = [-1.87979488e+08  2.98313209e+04  5.99584851e+07];
 dSunQuat = [ 0.57104144  0.41702718 -0.41731124 -0.57083389];
 
@@ -40,13 +41,12 @@ charStartBlenderCommand = strcat(charStartBlenderCommand, " > /tmp/blender_pipe 
 [status, result] = system('ps aux | grep blender'); % Check if process is running
 disp(result);
 
-%% 
-% TODO (PC): add code to test UDP-TCP server with CORTO interface
-
-% Compose and cast buffer
+% Compose and cast buffer (common)
 dBuffer = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat, dBody2Pos, dBody2Quat];
 ui8Buffer = typecast(dBuffer, 'uint8');
 
+%% CommManager_base_methods
+% UNIT TEST: methods of CommManager base class (bare usage)
 % Create CommManager object
 charServerAddress = 'localhost';
 ui32ServerPort = [30001, 51000]; % [TCP, UDP]
@@ -69,13 +69,20 @@ writtenBytes = objCommManager.WriteBuffer(ui8Buffer, false, ui32TargetPort);
 % bytes = read(tcpClient, numBytes, 'uint8');
 % data = typecast(uint8(bytes), 'single');
 % recvDataBuffer = swapbytes(recvDataBuffer); % NOT NEEDED 
+recvDataVector = typecast(recvDataBuffer, 'double');
 
 % Cast buffer to double and display image
 dImgRGB = UnpackImageFromCORTO(recvDataVector);
 imshow(dImgRGB);
 
+%% CORTOpyCommManager_high_level_class
+
+
+
 return
-%% Code to kill Blender processes
+
+%% Kill_blender_process
+% Code to kill Blender processes
 % Find the process
 [~, result] = system('pgrep -f blender'); % Get the process ID(s) of blender
 %disp(result);

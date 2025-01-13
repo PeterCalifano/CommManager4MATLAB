@@ -1,10 +1,10 @@
-function dImgRGB = UnpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)
+function dImgRGB = UnpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)%#codegen
 arguments
     dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
     bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
 end
 %% SIGNATURE
-% dImgRGB = UnpackImageFromCORTO(ui8ImgBuffer)
+% dImgRGB = UnpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)%#codegen
 % -------------------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % What the function does
@@ -32,8 +32,7 @@ end
 % [-]
 % -------------------------------------------------------------------------------------------------------------
 
-% This function unpack the ImgPackage vector from Blender and put it out as
-% an RGB matrix. 
+% This function unpack the ImgPackage vector from Blender and put it out as an RGB matrix. 
 
 dImgRGB = zeros(1536, 2048, 3, 'double'); 
 
@@ -141,7 +140,6 @@ end
         else
             fprintf('\n Not implemented yet \n')
         end
-
     end
 
 

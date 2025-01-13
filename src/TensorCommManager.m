@@ -34,7 +34,7 @@ classdef TensorCommManager < CommManager
         function self = TensorCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
                 charServerAddress (1,:) {ischar, isstring}  = "127.0.0.1" % Assumes localhost
-                ui32ServerPort    (1,1) uint32  {isscalar} = 55556
+                ui32ServerPort    (1,1) uint32  {isscalar}  = 55556 % Assumes port used by PyTorchAutoForge module 
                 dCommTimeout      (1,1) double  {isscalar}  = 20
             end
             
