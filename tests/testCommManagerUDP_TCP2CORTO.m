@@ -16,15 +16,21 @@ dSCPos  = [0. 0. 0.];
 dSCquat = [1. 0. 0. 0.];
 
 dBody1Pos = [  0.16706893   0.0235506  -13.93270439]; % [BU] 
-dBody2Pos = [  0.96841929   0.38199128 -13.145638  ]; % [BU]
+% dBody2Pos = [  0.96841929   0.38199128 -13.145638  ]; % [BU]
 
 dBody1Quat = [-0.05240883 -0.20821087  0.76502471  0.60715537]; % [BU] 
-dBody2Quat = [-0.17513088 -0.35985445  0.70648485  0.58370726]; % [BU]
+% dBody2Quat = [-0.17513088 -0.35985445  0.70648485  0.58370726]; % [BU]
 
-BlenderModelPath = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
+% BlenderModelPath = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
 
-charScriptName = 'CORTO_to_Simulink_HF_1_d.py';
-CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/milani-gnc/script/CORTO_interfaces/corto_PeterCdev/scripts/';
+charScriptName = 'CORTO_UDP_TCP_interface.py';
+
+BlenderModelPath = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
+
+% CORTO_pyInterface_path  = 'script/CORTO_interfaces/corto_PeterCdev/server_api/CORTO_UDP_TCP_interface.py';
+CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/';
+
+% CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/milani-gnc/script/CORTO_interfaces/corto_PeterCdev/scripts/';
 CORTO_pyInterface_path = strcat(CORTO_pyInterface_path, charScriptName);
 
 % Construct command to run
