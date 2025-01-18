@@ -10,7 +10,7 @@ classdef CORTOpyCommManager < CommManager
     %% METHODS
     % -------------------------------------------------------------------------------------------------------------
     %% CHANGELOG
-    % 
+    % 13-01-2025    Pietro Califano     First prototype implementation deriving from CommManager
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
@@ -43,6 +43,11 @@ classdef CORTOpyCommManager < CommManager
                kwargs.ui32TargetPort           (1,1) uint32        {isscalar, isnumeric} = 0
                kwargs.charTargetAddress        (1,:) string        {isscalar, isnumeric} = "127.0.0.1"
                kwargs.i32RecvTCPsize           (1,1) int32         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
+           end
+
+           if kwargs.bInitInPlace && kwargs.ui32TargetPort == 0
+                warning(['You requested connection of TCP at instantiation of class, but not ui32TargetPort was specified. ' ...
+                    'Make sure to pass it when sending data or set it before attempting'])
            end
 
            % Initialize base class 

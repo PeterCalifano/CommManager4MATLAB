@@ -22,10 +22,17 @@ dBody2Pos = [  0.96841929   0.38199128 -13.145638  ]; % [BU]
 dBody1Quat = [-0.05240883 -0.20821087  0.76502471  0.60715537]; % [BU] 
 dBody2Quat = [-0.17513088 -0.35985445  0.70648485  0.58370726]; % [BU]
 
-BlenderModelPath = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
+% BlenderModelPath = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
 
-charScriptName = 'CORTO_to_Simulink_HF_1_d.py';
-CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/milani-gnc/script/CORTO_interfaces/corto_PeterCdev/scripts/';
+charScriptName = 'CORTO_UDP_TCP_interface.py';
+% charScriptName = 'CORTO_to_Simulink_HF_1_d.py';
+
+BlenderModelPath = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
+
+% CORTO_pyInterface_path  = 'script/CORTO_interfaces/corto_PeterCdev/server_api/CORTO_UDP_TCP_interface.py';
+% CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/milani-gnc/script/CORTO_interfaces/corto_PeterCdev/scripts/';
+CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/';
+
 CORTO_pyInterface_path = strcat(CORTO_pyInterface_path, charScriptName);
 
 % Construct command to run
@@ -42,7 +49,7 @@ charStartBlenderCommand = strcat(charStartBlenderCommand, " > /tmp/blender_pipe 
 disp(result);
 
 % Compose and cast buffer (common)
-dBuffer = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat, dBody2Pos, dBody2Quat];
+dBuffer = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
 ui8Buffer = typecast(dBuffer, 'uint8');
 
 %% CommManager_base_methods
@@ -54,7 +61,7 @@ ui32TargetPort = 51001;
 dCommTimeout = 20;
 objCommManager = CommManager(charServerAddress, ui32ServerPort, ...
     dCommTimeout, "bLittleEndianOrdering", false, ...
-    "enumCommMode", "UDP_TCP", "ui32RecvTCPsize", 8*4*2048*1536);
+    "enumCommMode", "UDP_TCP", "i32RecvTCPsize", 8*4*2048*1536);
 
 % Test initialization
 objCommManager.Initialize();
@@ -63,19 +70,26 @@ objCommManager.Initialize();
 writtenBytes = objCommManager.WriteBuffer(ui8Buffer, false, ui32TargetPort);
 
 % Test read
-[recvBytes, recvDataBuffer, self] = objCommManager.ReadBuffer(); % TODO (PC) check endianness of recv
+[recvBytes, recvDataBuffer, self] = objCommManager.ReadBuffer(); 
 
-% Try to swap bytes?
-% bytes = read(tcpClient, numBytes, 'uint8');
-% data = typecast(uint8(bytes), 'single');
-% recvDataBuffer = swapbytes(recvDataBuffer); % NOT NEEDED 
+% 
 recvDataVector = typecast(recvDataBuffer, 'double');
 
 % Cast buffer to double and display image
 dImgRGB = UnpackImageFromCORTO(recvDataVector);
 imshow(dImgRGB);
 
+% DEVNOTE: server must go in waiting mode and disconnect the connection after some time in this test case.
+% Then, it must go into a mode to wait for new connections.
+
+% Close connection by deleting CommManager object
+clear objCommManager
+
 %% CORTOpyCommManager_high_level_class
+
+% Define cortopy comm. manager object initializing in place
+objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', true);
 
 
 
