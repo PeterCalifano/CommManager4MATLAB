@@ -1,9 +1,9 @@
 classdef CORTOpyCommManager < CommManager
     %% CONSTRUCTOR
-    % 
+    %
     % -------------------------------------------------------------------------------------------------------------
     %% DESCRIPTION
-    % 
+    %
     % -------------------------------------------------------------------------------------------------------------
     %% DATA MEMBERS
     % -------------------------------------------------------------------------------------------------------------
@@ -11,69 +11,229 @@ classdef CORTOpyCommManager < CommManager
     % -------------------------------------------------------------------------------------------------------------
     %% CHANGELOG
     % 13-01-2025    Pietro Califano     First prototype implementation deriving from CommManager
+    % 20-01-2025    Pietro Califano     Implementation of methods for Blender inputs preparation and
+    %                                   rendering loop execution for dataset generation.
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
     % -------------------------------------------------------------------------------------------------------------
     %% Future upgrades
-    % [-]
+    % 1) Move yaml configuration parser in parent classes instead of this specific TBD
     % -------------------------------------------------------------------------------------------------------------
     %% Function code
-    
-    
-    properties (SetAccess = protected, GetAccess = public)
 
+
+    properties (SetAccess = protected, GetAccess = public)
+        charConfigYamlFilename
     end
 
 
     methods (Access = public)
         % PUBLIC methods
         function self = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
-           arguments
+            arguments
                 charServerAddress (1,:) {ischar, isstring}              = "127.0.0.1" % Assumes localhost
                 ui32ServerPort    (1,2) uint32  {isvector, isnumeric}   = [30001, 51000]; % [TCP, UDP] Assumes ports used by CORTOpy interface
                 dCommTimeout      (1,1) double  {isscalar, isnumeric}   = 45
-           end
-           % TODO: adjust kwargs required for CORTOpy
-           arguments
-               kwargs.bInitInPlace             (1,1) logical       {islogical, isscalar} = false
-               kwargs.enumCommMode             (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.UDP_TCP
-               kwargs.bLittleEndianOrdering    (1,1) logical       {islogical, isscalar} = true;
-               kwargs.dOutputDatagramSize      (1,1) double        {isscalar, isnumeric} = 512
-               kwargs.ui32TargetPort           (1,1) uint32        {isscalar, isnumeric} = 0
-               kwargs.charTargetAddress        (1,:) string        {isscalar, isnumeric} = "127.0.0.1"
-               kwargs.i32RecvTCPsize           (1,1) int32         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
-           end
+            end
+            % TODO: adjust kwargs required for CORTOpy
+            arguments
+                kwargs.bInitInPlace             (1,1) logical       {islogical, isscalar} = false
+                kwargs.enumCommMode             (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.UDP_TCP
+                kwargs.bLittleEndianOrdering    (1,1) logical       {islogical, isscalar} = true;
+                kwargs.dOutputDatagramSize      (1,1) double        {isscalar, isnumeric} = 512
+                kwargs.ui32TargetPort           (1,1) uint32        {isscalar, isnumeric} = 0
+                kwargs.charTargetAddress        (1,:) string        {isscalar, isnumeric} = "127.0.0.1"
+                kwargs.i32RecvTCPsize           (1,1) int32         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
+                kwargs.charConfigYamlFilename   (1,:) string                              = ""
+            end
 
-           if kwargs.bInitInPlace && kwargs.ui32TargetPort == 0
+            if kwargs.bInitInPlace && kwargs.ui32TargetPort == 0
                 warning(['You requested connection of TCP at instantiation of class, but not ui32TargetPort was specified. ' ...
                     'Make sure to pass it when sending data or set it before attempting'])
-           end
+            end
 
-           % Initialize base class 
-           self = self@CommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
-               'bUSE_PYTHON_PROTO', kwargs.bUSE_PYTHON_PROTO, 'bUSE_CPP_PROTO', ...
-               kwargs.bUSE_CPP_PROTO, 'bInitInPlace', kwargs.bInitInPlace, ...
-               'charTargetAddress', kwargs.charTargetAddress, 'bLittleEndianOrdering', kwargs.bLittleEndianOrdering, ...
-               'dOutputDatagramSize', kwargs.dOutputDatagramSize, 'enumCommMode', kwargs.enumCommMode, ...
-               'i32RecvTCPsize', kwargs.i32RecvTCPsize, 'ui32TargetPort',  kwargs.ui32TargetPort);
+            % Initialize base class
+            self = self@CommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+                'bUSE_PYTHON_PROTO', kwargs.bUSE_PYTHON_PROTO, 'bUSE_CPP_PROTO', ...
+                kwargs.bUSE_CPP_PROTO, 'bInitInPlace', kwargs.bInitInPlace, ...
+                'charTargetAddress', kwargs.charTargetAddress, 'bLittleEndianOrdering', kwargs.bLittleEndianOrdering, ...
+                'dOutputDatagramSize', kwargs.dOutputDatagramSize, 'enumCommMode', kwargs.enumCommMode, ...
+                'i32RecvTCPsize', kwargs.i32RecvTCPsize, 'ui32TargetPort',  kwargs.ui32TargetPort);
+
+            % Parse yaml configuration file if provided
+            if not(strcmpi(kwargs.charConfigYamlFilename, ""))
+                self.parseYamlConfig(kwargs.charConfigYamlFilename);
+            end
+        end
+
+        function [outImgArrays, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
+                                                         dSunAttDCM_Buffer_NavframeFromTF, ...
+                                                         dCameraOrigin_Buffer_NavFrame, ...
+                                                         dCameraAttDCM_Buffer_NavframeFromTF, ...
+                                                         dBodiesOrigin_Buffer_NavFrame, ...
+                                                         dBodiesAttDCM_Buffer_NavFrameFromTF, ...
+                                                         kwargs)
+            arguments (Input)
+                self
+                dSunVector_Buffer_NavFrame              (3,:)   double {isvector, isnumeric}
+                dSunAttDCM_Buffer_NavframeFromTF        (3,3,:) double {ismatrix, isnumeric}
+                dCameraOrigin_Buffer_NavFrame           (3,:)   double {isvector, isnumeric}
+                dCameraAttDCM_Buffer_NavframeFromTF     (3,3,:)   double {ismatrix, isnumeric}
+                dBodiesOrigin_Buffer_NavFrame           (3,:,:)   double {ismatrix, isnumeric} = zeroes(3,1)
+                dBodiesAttDCM_Buffer_NavFrameFromTF     (3,3,:,:) double {ismatrix, isnumeric} = eye(3)
+            end
+            arguments (Input)
+                kwargs.charConfigYamlFilename           (1,:)   string = ""
+                kwargs.charOutputDatatype   (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "double"
+                kwargs.ui32HorizontalSize   (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32VerticalSize     (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32NumOfBodies      (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32NumOfImgChannels (1,1) uint32 {isnumeric, isscalar} = -1
+            end
+
+            % Parse configuration file if not already initialized or override
+            if not(strcmpi(kwargs.charConfigYamlFilename, ""))
+                self.parseYamlConfig(kwargs.charConfigYamlFilename);
+            end
+                
+            % Optionally the user may instantiate the class or set the data for rendering sequence before calling this method. Default args uses class attributes.
+            % TODO (PC) complete configuration setup for method. Need to add indexing of input yaml config
+            if any([kwargs.ui32HorizontalSize, ...
+                    kwargs.ui32VerticalSize, ...
+                    kwargs.ui32NumOfBodies, ...
+                    kwargs.ui32NumOfImgChannels] == -1)
+
+                % Load configuration parameters from strConfigFromYaml
+                assert(not(strcmpi(self.strConfigFromYaml, "")), "Class instance configuration not loaded from Yaml. " + ...
+                    "Please provide configuration yaml as used by CORTO_interface UDP-TCP script at instantiation or as input to this method." + ...
+                    "Alternatively, provide all data as input kwargs parameters.")
+
+                ui32HorizontalSize      = self.strConfigFromYaml;
+                ui32VerticalSize        = self.strConfigFromYaml;
+                ui32NumOfBodies         = self.strConfigFromYaml;
+                ui32NumOfImgChannels    = self.strConfigFromYaml;
+
+            else
+
+                % Use input parameters (must all be specified)
+                ui32HorizontalSize      = kwargs.ui32HorizontalSize  ;
+                ui32VerticalSize        = kwargs.ui32VerticalSize    ;
+                ui32NumOfBodies         = kwargs.ui32NumOfBodies     ;
+                ui32NumOfImgChannels    = kwargs.ui32NumOfImgChannels;
+
+            end
+
+            % Input and validation checks 
+            ui32NumOfImages = uint32();
+        
+            if ui32NumOfBodies == 1
+                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 3);
+                % TODO: complete
+            else
+                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 4);
+                % TODO: complete
+            end
+                        
+            % Rendering loop
+            outImgArrays = zeros(ui32HorizontalSize, ui32VerticalSize, ui32NumOfImgChannels, ui32NumOfImages, char(charOutputDatatype) );
+
+            for idImg = 1:ui32NumOfImages
+                
+                % Get data from buffers
+                dSunVector_NavFrame             = dSunVector_Buffer_NavFrame         (:, idImg);
+                dSunAttDCM_NavframeFromTF       = dSunAttDCM_Buffer_NavframeFromTF   (:,:, idImg);
+                dCameraOrigin_NavFrame          = dCameraOrigin_Buffer_NavFrame      (:, idImg);
+                dCameraAttDCM_NavframeFromTF    = dCameraAttDCM_Buffer_NavframeFromTF(:,:, idImg);
+
+                if ui32NumOfBodies == 1
+                    % Handle single body assuming 2D and 3D arrays as inputs
+                    dBodiesOrigin_NavFrame          = dBodiesOrigin_Buffer_NavFrame      (:, idImg);
+                    dBodiesAttDCM_NavFrameFromTF    = dBodiesAttDCM_Buffer_NavFrameFromTF(:,:, idImg);
+
+                else
+                    % Handle multiple bodies as 3D and 4D matrices for positions and DCMs
+                    dBodiesOrigin_NavFrame          = dBodiesOrigin_Buffer_NavFrame      (:,:, idImg);
+                    dBodiesAttDCM_NavFrameFromTF    = dBodiesAttDCM_Buffer_NavFrameFromTF(:,:,:, idImg);
+                end
+
+                % Call renderImage implementation ( TODO (PC) complete implementation ) 
+                dImg = self.renderImage(dSunVector_NavFrame, ...
+                                        dSunAttDCM_NavframeFromTF, ...
+                                        dCameraOrigin_NavFrame, ...
+                                        dCameraAttDCM_NavframeFromTF, ...
+                                        dBodiesOrigin_NavFrame, ...
+                                        dBodiesAttDCM_NavFrameFromTF, ...
+                                        kwargs); % TODO: specify kwargs and how to treat image
+
+                % Store image into output array
+                outImgArrays(1:ui32HorizontalSize, 1:ui32VerticalSize, idImg) = cast(dImg, kwargs.charOutputDatatype);
+                
+                % Get labels data
+                % TODO (PC) next upgrade, transmit through TCP? TBD
+            end
+        
+            % Squeeze array if number of channels is equal to 1
+            if ui32NumOfImgChannels == 1
+                outImgArrays = squeeze(outImgArrays);
+            end
+
+        end
+
+        % Single image rendering from disaggregated scene data
+        function [dImg, self] = renderImage(self, dSunVector_NavFrame, ...
+                                            dSunAttDCM_NavframeFromTF, ...
+                                            dCameraOrigin_NavFrame, ...
+                                            dCameraAttDCM_NavframeFromTF, ...
+                                            dBodiesOrigin_NavFrame, ...
+                                            dBodiesAttDCM_NavFrameFromTF, ...
+                                            kwargs)
+            arguments
+                self
+                dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
+                dSunAttDCM_NavframeFromTF       (3,3)   double {ismatrix, isnumeric}
+                dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
+                dCameraAttDCM_NavframeFromTF    (3,3)   double {ismatrix, isnumeric}
+                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeroes(3,1)
+                dBodiesAttDCM_NavFrameFromTF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
+            end
+            arguments % kwargs arguments
+                kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.dRenderFrameOrigin              (3,1)   double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_NavFrameFromRenderFrame    (3,3)   double {ismatrix, isnumeric} = eye(3)
+            end
             
+            % Input size and validation checks
+            assert( size(dBodiesOrigin_NavFrame, 2) == size(dBodiesAttDCM_NavFrameFromTF, 3), 'Number of bodies position does not match number of attitude matrices')
+
+            % Determine size of vector
+            dSceneDataVector = zeros(1, 7 * (2 + size(dBodiesOrigin_NavFrame, 2))); % [PQ_i] representation [SunPQ, CameraPQ, Body1PQ, ... BodyNPQ]
+
+            % Convert disaggregated scene data to dSceneData vector representation
+            dSceneDataVector(:) = self.ComposeSceneDataVector(dSunVector_NavFrame, dSunAttDCM_NavframeFromTF, ...
+                dCameraOrigin_NavFrame, dCameraAttDCM_NavframeFromTF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromTF, 'enumRenderingFrame', kwargs.enumRenderingFrame, 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, 'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
+
+            % Call renderImageFromPQ_ implementation
+            [dImg, self] = self.renderImageFromPQ_(dSceneDataVector);
+
         end
 
 
-        function [dImg, self] = getImageArray(self, dSceneData)
+        function [dImg, self] = renderImageFromPQ_(self, dSceneDataVector)
             arguments
                 self       (1,1)
-                dSceneData (1,:) double {isvector, isnumeric}
+                dSceneDataVector (1,:) double {isvector, isnumeric}
             end
-            
+            % NOTE: this class is intended as internal method, but left exposed for advanced users
+            % and improved flexibility of the class implementation.
+
             % Input check
-            assert( mod(dSceneData, 7) == 0, ['Number of doubles to send to CORTOpy must be a multiple of 7 (PQ message). \n' ...
+            assert( mod(dSceneDataVector, 7) == 0, ['Number of doubles to send to CORTOpy must be a multiple of 7 (PQ message). \n' ...
                 'Required format: [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat, ... dBodyNPos, dBodyNQuat]']);
-            assert( size(dSceneData, 2) - 14 > 0, 'Only Sun and Camera PQ specified in dSceneData message. You should specify at least 1 body.');
-            
+            assert( size(dSceneDataVector, 2) - 14 > 0, 'Only Sun and Camera PQ specified in dSceneData message. You should specify at least 1 body.');
+
             % Cast to bytes
-            ui8SceneDataBuffer = typecast(dBuffer, 'uint8');
+            ui8SceneDataBuffer = typecast(dSceneDataVector, 'uint8');
             % Send to CORTOpy server
             writtenBytes = self.WriteBuffer(ui8SceneDataBuffer, false);
             fprintf('\n\tSent %d bytes. Image requested. Waiting for data...\n', writtenBytes)
@@ -88,10 +248,147 @@ classdef CORTOpyCommManager < CommManager
             dImg = UnpackImageFromCORTO(recvDataVector);
 
         end
+
     end
 
     methods (Static, Access = public)
-        % TODO (PC) make this function generic. Currently only for Milani NavCam!
+        function [dSceneDataVector] = ComposeSceneDataVector(dSunVector_NavFrame, ...
+                dSunAttDCM_NavframeFromTF, ...
+                dCameraOrigin_NavFrame, ...
+                dCameraAttDCM_NavframeFromTF, ...
+                dBodiesOrigin_NavFrame, ...
+                dBodiesAttDCM_NavFrameFromTF, ...
+                kwargs)
+            arguments
+                dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
+                dSunAttDCM_NavframeFromTF       (3,3)   double {ismatrix, isnumeric}
+                dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
+                dCameraAttDCM_NavframeFromTF    (3,3)   double {ismatrix, isnumeric}
+                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeroes(3,1)
+                dBodiesAttDCM_NavFrameFromTF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
+            end
+            arguments % kwargs arguments
+                kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.dRenderFrameOrigin              (3,1)   double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_NavFrameFromRenderFrame    (3,3)   double {ismatrix, isnumeric} = eye(3)
+            end
+
+            % Get number of bodies
+            ui32NumOfBodies = size(dBodiesOrigin_NavFrame, 2);
+            assert(size(dBodiesAttDCM_NavFrameFromTF, 3) == ui32NumOfBodies, 'Unmatched number of bodies in Position and Attitude DCM arrays. Please check input data.');
+            
+            % Convert all attitude matrices to quaternions used by Blender
+            dSunQuaternion_ToNavFrame
+            dCameraQuaternion_ToNavFrame
+            dBodiesQuaternion_ToNavFrame
+
+            % Compose output vector
+            dSceneDataVector = zeros(1, 14 + ui32NumOfBodies * 7);
+            
+            % Allocate Sun PQ
+            dSceneDataVector(1:7) = [dSunVector_NavFrame, dSunQuaternion];
+            % Allocate Camera PQ
+            dSceneDataVector(8:14) = [dCameraOrigin_NavFrame, dCameraQuaternion];
+
+            % Allocate bodies PQ
+            ui32bodiesAllocPtr = uint32(15);
+            ui32DeltaPQ = uint32(7);
+
+            for idB = 1:ui32NumOfBodies
+                dSceneDataVector(ui32bodiesAllocPtr : ui32bodiesAllocPtr + 7) = [dBodiesOrigin_NavFrame(1:3, idB); dBodiesQuaternion_ToNavFrame(1:4, idB)];
+                ui32bodiesAllocPtr = ui32bodiesAllocPtr + ui32DeltaPQ;
+            end
+
+        end
+
+        % TODO (PC) complete methods for conversions
+        function [dBlenderQuat_AfromB, dBlenderDCM_AfromB] = ConvertNonBlenderDCMtoBlenderQuat(dNonBlenderDCM_AfromB)
+            arguments (Input)
+                dNonBlenderDCM_AfromB (3,3,:) double {ismatrix, isnumeric}
+            end
+            arguments (Output)
+                dBlenderQuat_AfromB (3,:) double {ismatrix,isnumeric} % TODO (PC) specify convertion in the documentation
+                dBlenderDCM_AfromB (3,3,:) double {ismatrix,isnumeric}
+            end
+
+            % Get number of matrices to convert
+            ui32NumOfDCM = uint32(size(dBlenderDCM_AfromB, 3));
+
+            % Conversion loop (TOOD)
+            for idM = 1:ui32NumOfDCM
+                % Convert matrices to Blender DCMs
+
+                % Convert DCM TO Blender quaternions
+
+            end
+        end
+
+        function [dBlenderQuat_AfromB] = DCM2BlenderQuat(dDCM_AfromB)
+            arguments
+                dDCM_AfromB (3,3,:) double {ismatrix,isnumeric}
+            end
+
+            % Get number of conversion to be done
+            ui32NumOfDCM = uint32(size(dDCM_AfromB, 3));
+
+            if ui32NumOfDCM == 1
+                dBlenderQuat_AfromB = [0; 0; 0; 0];
+                dBlenderQuat_AfromB(:) = DCM2BlenderQuat_(dDCM_AfromB);
+            else
+                dBlenderQuat_AfromB = zeros(4, ui32NumOfDCM);
+                for idM = 1:ui32NumOfDCM
+                    dBlenderQuat_AfromB(1:4, idM) = DCM2BlenderQuat_(dDCM_AfromB(1:3, 1:3, idM));
+                end
+            end
+            % LOCAL FUNCTION impl
+            function [dBlenderQuat_AfromB] = DCM2BlenderQuat_(dDCM_AfromB)
+                % TODO conversion
+                
+            end
+        end
+
+        function [dBlenderCamDCM_AfromB] = NonBlenderCamDCMtoBlenderCamDCM(dNonBlenderCamDCM_AfromB)
+            arguments
+                dNonBlenderCamDCM_AfromB (3,3,:) double {ismatrix,isnumeric}
+            end
+
+            % Allocate output
+            dBlenderCamDCM_AfromB = zeros(size(dNonBlenderCamDCM_AfromB));
+
+            for idM = 1:size(dNonBlenderCamDCM_AfromB, 3)
+
+                % Get DCM matrix
+                dTmpCamDCM = dNonBlenderCamDCM_AfromB(:,:, idM);
+
+                % Modify Camera DCM by rotating around X axis of pi radians
+    
+                dAxisZ_Bl = -dTmpCamDCM(3, :);
+                dAxisX_Bl =  dTmpCamDCM(1, :);
+                dAxisY_Bl = -dTmpCamDCM(2, :);
+                
+                % Recompose DCM
+                dBlenderCamDCM_AfromB(:,:,idM) = [dAxisX_Bl; dAxisY_Bl; dAxisZ_Bl];
+                
+            end
+
+        end
+
+        function [dNonBlenderDCM_AfromB] = BlenderDCMtoNonBlenderDCM(dBlenderDCM_AfromB)
+            arguments
+                dBlenderDCM_AfromB (3,3,:) double {ismatrix,isnumeric}
+            end
+
+            % Allocate output
+            dNonBlenderDCM_AfromB = zeros(size(dBlenderDCM_AfromB));
+
+            for idM = 1:size(dBlenderDCM_AfromB, 3)
+                % Rotate NonBlenderDCM to Blender DCM
+
+            end
+
+        end
+
+                % TODO (PC) make this function generic. Currently only for Milani NavCam!
         function dImg = UnpackImageFromCORTO(dImgBuffer, bApplyBayerFilter, bIsImageRGB)
             arguments
                 dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
@@ -99,22 +396,37 @@ classdef CORTOpyCommManager < CommManager
                 bIsImageRGB         (1,1) logical {islogical, isscalar} = false;
             end
 
-
             if bIsImageRGB
                 % Call external function
                 dImg = UnpackImageFromCORTO_(dImgBuffer, bApplyBayerFilter);
             else
-                % TODO (PC) You will need to modiy the input to the class/function 
+                % TODO (PC) You will need to modiy the input to the class/function
                 error('Not implemented yet. Requires size of camera to be known!')
-            % dImg = zeros(1536, 2048, 3, 'uint8');
+                % dImg = zeros(1536, 2048, 3, 'uint8');
 
             end
         end
-
     end
-    
+
     methods (Access = protected)
-    % Internal implementations
+        % Internal implementations
+        function self = parseYamlConfig(self, charConfigYamlFilename)
+
+            % Check if file exists
+            assert(exist(charConfigYamlFilename, 'file'), "Yaml configuration file specified as input not found.")
+
+            % Check if it has file extension, else add
+            [~, ~, charExt] = fileparts(charConfigYamlFilename);
+
+            if strcmpi(charExt, "")
+                charConfigYamlFilename = strcat(charConfigYamlFilename, ".yaml");
+            end
+
+            % Load file using yaml community library
+            self.strConfigFromYaml = yaml.loadFile(charConfigYamlFilename);
+
+        end
+
         function dImgRGB = UnpackImageFromCORTO_(self, dImgBuffer, bApplyBayerFilter)
             arguments
                 self                (1,1)
@@ -161,7 +473,7 @@ classdef CORTOpyCommManager < CommManager
             end
 
         end
-        
+
         % TODO (PC): rework these functions!
         function dImgBayer = ApplyBayerFilter(self, ImgRGB)
             % This function convert the RGB image of the environment into one generted
@@ -247,7 +559,5 @@ classdef CORTOpyCommManager < CommManager
         end
 
     end % End of methods section
-
-
 
 end
