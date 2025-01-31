@@ -22,37 +22,109 @@ dBody2Pos = [  0.96841929   0.38199128 -13.145638  ]; % [BU]
 dBody1Quat = [-0.05240883 -0.20821087  0.76502471  0.60715537]; % [BU] 
 dBody2Quat = [-0.17513088 -0.35985445  0.70648485  0.58370726]; % [BU]
 
-BlenderModelPath = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
-
-charScriptName = 'CORTO_UDP_TCP_interface.py';
-% charScriptName = 'CORTO_to_Simulink_HF_1_d.py';
-
-%BlenderModelPath = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
-
-% CORTO_pyInterface_path  = 'script/CORTO_interfaces/corto_PeterCdev/server_api/CORTO_UDP_TCP_interface.py';
-% CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/milani-gnc/script/CORTO_interfaces/corto_PeterCdev/scripts/';
-CORTO_pyInterface_path = '/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/';
-
-CORTO_pyInterface_path = strcat(CORTO_pyInterface_path, charScriptName);
-
-% Construct command to run
-charStartBlenderCommand = sprintf('bash script/CORTO_interfaces/StartBlenderServer.sh -m "%s" -p "%s"', ...
-    BlenderModelPath, CORTO_pyInterface_path);
-
-% system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
-charStartBlenderCommand = strcat(charStartBlenderCommand, " > /tmp/blender_pipe &");
-
-% Define cortopy comm. manager object initializing in place (connection to server)
-charServerAddress = 'localhost';
-ui32ServerPort = [30001, 51000]; % [TCP, UDP]
-ui32TargetPort = 51001;
-dCommTimeout = 20;
-objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
-    'bInitInPlace', true);
+% DEVNOTE: test opens and closes the server multiple times due to current server limitation in handling
+% disconnections and reconnections.
 
 % Define post test cleanup
 cleanup = onCleanup(@() clear); 
 
+% Select Blender model
+charScriptName              = 'CORTO_UDP_TCP_interface.py'; 
+
+% charBlenderModelPath    = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
+charBlenderModelPath                = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
+charCORTOpyInterfacePath            = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/";
+charCORTOpyInterfacePath            = strcat(charCORTOpyInterfacePath, charScriptName);
+charStartBlenderServerScriptPath    = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/StartBlenderServer.sh";
+
+charServerAddress = 'localhost';
+ui32ServerPort = [30001, 51000]; % [TCP, UDP]
+ui32TargetPort = 51001;
+dCommTimeout = 20;
+
+%% CORTOpyCommManager_connectionWithoutAutoManagement
+
+% Construct command to run
+charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+    charStartBlenderServerScriptPath, charBlenderModelPath, charCORTOpyInterfacePath);
+
+% system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
+charStartBlenderCommand = strcat(charStartBlenderCommand, " &");
+
+% Make start call
+system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
+system(charStartBlenderCommand);
+pause(0.75); % Wait sockets instantiation
+
+% Define cortopy comm. manager object initializing in place (connection to server)
+assert(CORTOpyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1)), 'Server startup attempt failed. Test cannot continue.')
+
+objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', true);
+
+pause(0.25);
+
+% Terminate Blender process to close server (manually)
+if isunix == true
+    % Find the process
+    [~, result] = system('pgrep -f blender'); % Get the process ID(s) of blender
+    %disp(result);
+
+    % Trim whitespace
+    result = strtrim(result);
+
+    % Split the PIDs into a cell array of strings
+    pids = strsplit(result);
+
+    if not(isempty(result))
+        % Kill the process
+        for pid = pids
+            fprintf('Killing process %s...\n', pid{:})
+            system(sprintf('kill -9 %s', pid{:}));
+        end
+    end
+
+else
+    error("This code should not run for Windows as the InitFcn of the model performs the task directly. Report using issues please.")
+end
+
+clear objCortopyCommManager 
+
+%% CORTOpyCommManager_serverManagementMethods
+objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', false, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath);
+
+% Start server using instance method
+bIsRunning = objCortopyCommManager.startBlenderServer();
+
+% Check if server is ok
+bIsRunning(:) = objCortopyCommManager.checkRunningBlenderServer();
+assert(bIsRunning)
+
+% Attempt connection
+objCortopyCommManager.Initialize();
+
+% Delete instance and terminate server
+delete(objCortopyCommManager) % MUST NOT close server
+bIsRunning(:) = objCortopyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1));
+assert(bIsRunning)
+
+% Terminate server manually
+objCortopyCommManager.terminateBlenderProcessesStatic()
+
+%% CORTOpyCommManager_serverAutoManagement
+% Instance definition with automatic management of server
+objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath);
+
+% Delete instance and terminate server
+delete(objCortopyCommManager)
+
+return
 %% CORTOpyCommManager_renderImageFromPQ_
 
 % Compose scene data stuct 

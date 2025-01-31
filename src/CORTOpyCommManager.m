@@ -10,9 +10,10 @@ classdef CORTOpyCommManager < CommManager
     %% METHODS
     % -------------------------------------------------------------------------------------------------------------
     %% CHANGELOG
-    % 13-01-2025    Pietro Califano     First prototype implementation deriving from CommManager
+    % 13-01-2025    Pietro Califano     First prototype implementation deriving from CommManager.
     % 20-01-2025    Pietro Califano     Implementation of methods for Blender inputs preparation and
     %                                   rendering loop execution for dataset generation.
+    % 31-01-2024    Pietro Califano     Implement auto management of Blender server for Linux.
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
@@ -24,12 +25,28 @@ classdef CORTOpyCommManager < CommManager
 
 
     properties (SetAccess = protected, GetAccess = public)
+        % 
         charConfigYamlFilename
+        % ui32BlenderRecvPort % Get from yaml file else from input
+        % ui32ServerPort % Get from yaml if specified else from input % Defined in superclass
+
+        % Configuration
+        bSendLogToShellPipe                     (1,1) logical {islogical, isscalar} = false % FIXME, not working is true due to system call failure
+
+        charBlenderModelPath                (1,1) string {mustBeA(charBlenderModelPath, ["string", "char"])}
+        charCORTOpyInterfacePath            (1,1) string {mustBeA(charCORTOpyInterfacePath, ["string", "char"])}  
+        charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
+        
+
+        % Runtime flags
+        bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
+        bIsServerRunning                        (1,1) logical {islogical, isscalar} = false
     end
 
 
     methods (Access = public)
         % PUBLIC methods
+        % CONSTRUCTOR
         function self = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
                 charServerAddress (1,:) {ischar, isstring}              = "127.0.0.1" % Assumes localhost
@@ -38,34 +55,109 @@ classdef CORTOpyCommManager < CommManager
             end
             % TODO: adjust kwargs required for CORTOpy
             arguments
-                kwargs.bInitInPlace             (1,1) logical       {islogical, isscalar} = false
-                kwargs.enumCommMode             (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.UDP_TCP
-                kwargs.bLittleEndianOrdering    (1,1) logical       {islogical, isscalar} = true;
-                kwargs.dOutputDatagramSize      (1,1) double        {isscalar, isnumeric} = 512
-                kwargs.ui32TargetPort           (1,1) uint32        {isscalar, isnumeric} = 0
-                kwargs.charTargetAddress        (1,:) string        {isscalar, isnumeric} = "127.0.0.1"
-                kwargs.i32RecvTCPsize           (1,1) int32         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
-                kwargs.charConfigYamlFilename   (1,:) string                              = ""
+                kwargs.bInitInPlace                     (1,1) logical       {islogical, isscalar} = false
+                kwargs.enumCommMode                     (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.UDP_TCP
+                kwargs.bLittleEndianOrdering            (1,1) logical       {islogical, isscalar} = true;
+                kwargs.dOutputDatagramSize              (1,1) double        {isscalar, isnumeric} = 512
+                kwargs.ui32TargetPort                   (1,1) uint32        {isscalar, isnumeric} = 0
+                kwargs.charTargetAddress                (1,:) string        {mustBeA(kwargs.charTargetAddress , ["string", "char"])} = "127.0.0.1"
+                kwargs.i32RecvTCPsize                   (1,1) int32         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
+                kwargs.charConfigYamlFilename           (1,:) string        {mustBeA(kwargs.charConfigYamlFilename , ["string", "char"])}  = ""
+                kwargs.bAutoManageBlenderServer         (1,1) logical       {isscalar, islogical} = false
+                kwargs.charStartBlenderServerCallerPath (1,:) string        {mustBeA(kwargs.charStartBlenderServerCallerPath , ["string", "char"])} = ""
+                kwargs.charBlenderModelPath             (1,:) string        {mustBeA(kwargs.charBlenderModelPath , ["string", "char"])} = ""
+                kwargs.charCORTOpyInterfacePath         (1,:) string        {mustBeA(kwargs.charCORTOpyInterfacePath , ["string", "char"])} = ""
             end
 
-            if kwargs.bInitInPlace && kwargs.ui32TargetPort == 0
-                warning(['You requested connection of TCP at instantiation of class, but not ui32TargetPort was specified. ' ...
-                    'Make sure to pass it when sending data or set it before attempting'])
+            bIsValidServerAutoManegementConfig = false;
+            
+            % Check if auto management can be used
+            if isunix()
+
+                if kwargs.bAutoManageBlenderServer && strcmpi(kwargs.charStartBlenderServerCallerPath, "")
+                    % If requested but not configured correctly
+                    warning(['Auto management requested, but charStartBlenderServerCallerPath not set. ' ...
+                        'Mode cannot be enabled: please manage server manually.'])
+                    bIsValidServerAutoManegementConfig = false;
+
+                    if any([strcmpi(kwargs.charBlenderModelPath , ""), strcmpi(kwargs.charCORTOpyInterfacePath, "")])
+                        error("Auto management requested, but either charCORTOpyInterfacePath or charBlenderModelPath paths are undefined.")
+                    end
+
+                    if kwargs.bInitInPlace
+                        error('Auto manegement requested together with connection in-place, but cannot be enabled. Throwing error (connection attempt would fail) ...')
+                    end
+
+                elseif kwargs.bAutoManageBlenderServer
+                    % All inputs provided
+                    disp('Auto management of Blender server set to enabled.')
+                    bIsValidServerAutoManegementConfig = true;
+                else
+                    disp('Auto management mode for Blender server disabled. Please make sure the server is open before attemping connection.')
+                end
+
+            elseif kwargs.bAutoManageBlenderServer
+                % Requested but not on Linux
+                warning('Auto management requested, but is only supported on Linux.')
+                bIsValidServerAutoManegementConfig = false;
+             end
+
+
+            % Run blender server automanagement code (after base class instantiation)
+            if bIsValidServerAutoManegementConfig
+                % Override init in place and connect after starting server
+                bInitInPlace = false;
+            else
+                % Manually management of server
+                bInitInPlace = kwargs.bInitInPlace;
             end
 
-            % Initialize base class
+            % Initialize base class to define self 
             self = self@CommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
-                'bUSE_PYTHON_PROTO', kwargs.bUSE_PYTHON_PROTO, 'bUSE_CPP_PROTO', ...
-                kwargs.bUSE_CPP_PROTO, 'bInitInPlace', kwargs.bInitInPlace, ...
+                'bUSE_PYTHON_PROTO', false, 'bUSE_CPP_PROTO', false, 'bInitInPlace', bInitInPlace, ...
                 'charTargetAddress', kwargs.charTargetAddress, 'bLittleEndianOrdering', kwargs.bLittleEndianOrdering, ...
                 'dOutputDatagramSize', kwargs.dOutputDatagramSize, 'enumCommMode', kwargs.enumCommMode, ...
                 'i32RecvTCPsize', kwargs.i32RecvTCPsize, 'ui32TargetPort',  kwargs.ui32TargetPort);
 
+            % Store paths
+            self.charStartBlenderServerCallerPath = kwargs.charStartBlenderServerCallerPath;
+            self.charBlenderModelPath = kwargs.charBlenderModelPath;
+            self.charCORTOpyInterfacePath = kwargs.charCORTOpyInterfacePath;
+            self.bIsValidServerAutoManegementConfig = bIsValidServerAutoManegementConfig;
+            self.ui32ServerPort = ui32ServerPort;
+            
+            % Start server if in auto management mode
+            if bIsValidServerAutoManegementConfig
+                [self.bIsServerRunning] = self.startBlenderServer();
+            end
+
             % Parse yaml configuration file if provided
             if not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                self.parseYamlConfig(kwargs.charConfigYamlFilename);
+                self.parseYamlConfig_(kwargs.charConfigYamlFilename);
+            end
+
+            % Check if initialization in place is configured correctly
+            if kwargs.bInitInPlace && kwargs.ui32TargetPort == 0
+                warning(['You requested connection of TCP at instantiation of class, but no ui32TargetPort was specified. ' ...
+                    'Make sure to pass it when sending data or set it before attempting'])
+            end
+
+            % If connection in place, try to connect to server
+            if bIsValidServerAutoManegementConfig && bInitInPlace == false
+                self.Initialize(); % TODO check this call is ok
+            end
+
+        end
+        
+        % DESTRUCTOR
+        function delete(self)
+            % If auto management of Blender server, call termination method
+            if self.bIsValidServerAutoManegementConfig && self.bIsServerRunning
+                self.terminateBlenderProcesses();
             end
         end
+
+        % TODO: how to define destructor to terminate server process?
 
         function [outImgArrays, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
                                                          dSunAttDCM_Buffer_NavframeFromTF, ...
@@ -94,7 +186,7 @@ classdef CORTOpyCommManager < CommManager
 
             % Parse configuration file if not already initialized or override
             if not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                self.parseYamlConfig(kwargs.charConfigYamlFilename);
+                self.parseYamlConfig_(kwargs.charConfigYamlFilename);
             end
                 
             % Optionally the user may instantiate the class or set the data for rendering sequence before calling this method. Default args uses class attributes.
@@ -210,7 +302,7 @@ classdef CORTOpyCommManager < CommManager
             dSceneDataVector = zeros(1, 7 * (2 + size(dBodiesOrigin_NavFrame, 2))); % [PQ_i] representation [SunPQ, CameraPQ, Body1PQ, ... BodyNPQ]
 
             % Convert disaggregated scene data to dSceneData vector representation
-            dSceneDataVector(:) = self.ComposeSceneDataVector(dSunVector_NavFrame, dSunAttDCM_NavframeFromTF, ...
+            dSceneDataVector(:) = self.composeSceneDataVector(dSunVector_NavFrame, dSunAttDCM_NavframeFromTF, ...
                 dCameraOrigin_NavFrame, dCameraAttDCM_NavframeFromTF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromTF, 'enumRenderingFrame', kwargs.enumRenderingFrame, 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, 'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
 
             % Call renderImageFromPQ_ implementation
@@ -245,14 +337,178 @@ classdef CORTOpyCommManager < CommManager
 
             % Cast buffer to double and display image % TODO (PC): TBC if to keep here. May be moved to
             % acquireFrame of frontend algorithm branch?
-            dImg = UnpackImageFromCORTO(recvDataVector);
+            dImg = unpackImageFromCORTO(recvDataVector);
 
         end
 
     end
 
+    % Blender server automanagement methods
+    methods (Access = public)
+        % TODO this must be printed only if truly enabled. These methods can also be called manually
+
+        function [bIsServerRunning] = startBlenderServer(self)
+            % Call static method to start server
+            [bIsServerRunning] = CORTOpyCommManager.startBlenderServerStatic(self.charBlenderModelPath, ...
+                                                                             self.charCORTOpyInterfacePath, ...
+                                                                             self.charStartBlenderServerCallerPath, ...
+                                                                             self.bSendLogToShellPipe, ...
+                                                                             self.ui32ServerPort(1), ...
+                                                                             self.bIsValidServerAutoManegementConfig);
+
+            self.bIsServerRunning = bIsServerRunning;
+        end
+
+        function [bIsServerRunning] = checkRunningBlenderServer(self)
+            [bIsServerRunning] = CORTOpyCommManager.checkRunningBlenderServerStatic(self.ui32ServerPort(1));
+            self.bIsServerRunning = bIsServerRunning;
+        end
+
+
+        function [] = terminateBlenderProcesses(self)
+            if self.bIsValidServerAutoManegementConfig
+                fprintf("\nAuto managed mode is enabled. Attempting to terminate Blender processes automatically... \n")
+            end
+            % Call static termination method
+            CORTOpyCommManager.terminateBlenderProcessesStatic()
+        end
+
+    end
+
     methods (Static, Access = public)
-        function [dSceneDataVector] = ComposeSceneDataVector(dSunVector_NavFrame, ...
+
+        % Method to start blender server
+        function [bIsServerRunning] = startBlenderServerStatic(charBlenderModelPath, ...
+                                                               charCORTOpyInterfacePath, ...
+                                                               charStartBlenderServerCallerPath, ...
+                                                               bSendLogToShellPipe, ...
+                                                               ui32NetworkPortToCheck, ...
+                                                               bIsValidServerAutoManegementConfig)
+            arguments
+                charBlenderModelPath                    
+                charCORTOpyInterfacePath            
+                charStartBlenderServerCallerPath
+                bSendLogToShellPipe                     
+                ui32NetworkPortToCheck                  (1,1) uint32 {isnumeric, isscalar} = 51001        
+                bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
+            end
+
+            bIsServerRunning = false;
+
+            if CORTOpyCommManager.checkUnix_()
+                % charBlenderModelPath             % Path of .blend file to load
+                % charCORTOpyInterfacePath         % Path to python Blender interface script
+                % charStartBlenderServerCallerPath % Path to caller bash script
+
+                % DEVNOTE method works using the same assumption of RCS-1 code. The script is called by
+                % blender instead of as standalone. Next iterations will work by opening the server and
+                % setup everything calling Blender when needed for rendering
+                assert(isfile(charBlenderModelPath), sprintf('Blender model file %s not found.', charBlenderModelPath))
+                assert(isfile(charCORTOpyInterfacePath), sprintf('CORTO interface pyscript not found at %s.', charCORTOpyInterfacePath))
+                assert(isfile(charStartBlenderServerCallerPath), sprintf('Bash script to start CORTO interface pyscript not found at %s.', charStartBlenderServerCallerPath))
+
+                % Check if path has extesion
+                [charFileRoot, charFileName, charFileExt] = fileparts(charStartBlenderServerCallerPath);
+
+                if isempty(charFileExt) == true
+                    charStartBlenderServerCallerPath = fullfile(charFileRoot, charFileName, charFileExt);
+                end
+
+
+                try
+                    if bIsValidServerAutoManegementConfig
+                        fprintf("\nAuto managed mode is enabled. Attempting to start Blender server automatically... ")
+                    end
+
+                    % Construct command to run
+                    charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+                        charStartBlenderServerCallerPath, charBlenderModelPath, charCORTOpyInterfacePath);
+
+                    % Logging options
+                    if bSendLogToShellPipe == true
+                        system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
+                        charStartBlenderCommand = strcat(charStartBlenderCommand, " > /tmp/blender_pipe &");
+                        charLogPipePath = "Logging to pipe: /tmp/blender_pipe";
+                    else
+                        charStartBlenderCommand = strcat(charStartBlenderCommand, " &");
+                        charLogPipePath = "Log disabled.";
+                    end
+
+                    % Execute the command
+                    system(charStartBlenderCommand);
+                    pause(0.75); % Wait sockets instantiation
+
+                    % Check server is running
+                    [bIsServerRunning] = CORTOpyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
+
+                    if not(bIsServerRunning)
+                        error("Command executed: %s.\nHowever, the server did not started correctly. Check log if available.", charStartBlenderCommand)
+                    end
+
+                    fprintf(sprintf("DONE. %s \n", charLogPipePath));
+
+                catch ME
+                    if bIsValidServerAutoManegementConfig
+                        fprintf("\nAuto managed Blender server startup failed due to error: %s. \nExecution paused. Please start server manually before continuing.\n", ME.message)
+                        pause();
+                    else
+                        error("\nStartup of Blender server failed in manual mode due to: %s", string(ME.message) );
+                    end
+                end
+
+            end
+        end
+        
+        % Method to check server status
+        function [bIsServerRunning] = checkRunningBlenderServerStatic(ui32NetworkPort)
+            arguments
+                ui32NetworkPort (1,1) uint32 {isnumeric, isscalar}
+            end
+
+            if CORTOpyCommManager.checkUnix_()
+                % TODO
+                % ui32BlenderRecvPort % Required in self
+
+                [~, netstat_out] = system(sprintf('netstat -tulpnv | grep %d', ui32NetworkPort)); % Get the process ID(s) of blender
+                % Check if port in output message
+                if contains(netstat_out, sprintf("%d", ui32NetworkPort))
+                    bIsServerRunning = true;
+                else
+                    bIsServerRunning = false;
+                end
+
+            end
+
+        end
+        
+        % Method to terminate server if running
+        function [] = terminateBlenderProcessesStatic()
+
+            if CORTOpyCommManager.checkUnix_()
+
+                % Find the process
+                [~, charResult] = system('pgrep -f blender'); % Get the process ID(s) of blender
+
+                % Trim whitespace
+                charResult = strtrim(charResult);
+
+                % Split the PIDs into a cell array of strings
+                pids = strsplit(charResult);
+
+                if not(isempty(charResult))
+                    % Kill the process
+                    for pid = pids
+                        fprintf('Killing process %s...\n', pid{:})
+                        system(sprintf('kill -9 %s', pid{:}));
+                    end
+                end
+
+            end
+
+        end
+
+        % Method to compose scene data vector (PQ data)
+        function [dSceneDataVector] = composeSceneDataVector(dSunVector_NavFrame, ...
                 dSunAttDCM_NavframeFromTF, ...
                 dCameraOrigin_NavFrame, ...
                 dCameraAttDCM_NavframeFromTF, ...
@@ -302,7 +558,7 @@ classdef CORTOpyCommManager < CommManager
         end
 
         % TODO (PC) complete methods for conversions
-        function [dBlenderQuat_AfromB, dBlenderDCM_AfromB] = ConvertNonBlenderDCMtoBlenderQuat(dNonBlenderDCM_AfromB)
+        function [dBlenderQuat_AfromB, dBlenderDCM_AfromB] = convertNonBlenderDCMtoBlenderQuat(dNonBlenderDCM_AfromB)
             arguments (Input)
                 dNonBlenderDCM_AfromB (3,3,:) double {ismatrix, isnumeric}
             end
@@ -323,7 +579,7 @@ classdef CORTOpyCommManager < CommManager
             end
         end
 
-        function [dBlenderQuat_AfromB] = DCM2BlenderQuat(dDCM_AfromB)
+        function [dBlenderQuat_AfromB] = convertDCM2BlenderQuat(dDCM_AfromB)
             arguments
                 dDCM_AfromB (3,3,:) double {ismatrix,isnumeric}
             end
@@ -347,7 +603,7 @@ classdef CORTOpyCommManager < CommManager
             end
         end
 
-        function [dBlenderCamDCM_AfromB] = NonBlenderCamDCMtoBlenderCamDCM(dNonBlenderCamDCM_AfromB)
+        function [dBlenderCamDCM_AfromB] = convertNonBlenderCamDCMtoBlenderCamDCM(dNonBlenderCamDCM_AfromB)
             arguments
                 dNonBlenderCamDCM_AfromB (3,3,:) double {ismatrix,isnumeric}
             end
@@ -373,7 +629,7 @@ classdef CORTOpyCommManager < CommManager
 
         end
 
-        function [dNonBlenderDCM_AfromB] = BlenderDCMtoNonBlenderDCM(dBlenderDCM_AfromB)
+        function [dNonBlenderDCM_AfromB] = convertBlenderDCMtoNonBlenderDCM(dBlenderDCM_AfromB)
             arguments
                 dBlenderDCM_AfromB (3,3,:) double {ismatrix,isnumeric}
             end
@@ -389,7 +645,7 @@ classdef CORTOpyCommManager < CommManager
         end
 
                 % TODO (PC) make this function generic. Currently only for Milani NavCam!
-        function dImg = UnpackImageFromCORTO(dImgBuffer, bApplyBayerFilter, bIsImageRGB)
+        function dImg = unpackImageFromCORTO(dImgBuffer, bApplyBayerFilter, bIsImageRGB)
             arguments
                 dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
                 bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
@@ -398,7 +654,7 @@ classdef CORTOpyCommManager < CommManager
 
             if bIsImageRGB
                 % Call external function
-                dImg = UnpackImageFromCORTO_(dImgBuffer, bApplyBayerFilter);
+                dImg = unpackImageFromCORTO_(dImgBuffer, bApplyBayerFilter);
             else
                 % TODO (PC) You will need to modiy the input to the class/function
                 error('Not implemented yet. Requires size of camera to be known!')
@@ -406,11 +662,20 @@ classdef CORTOpyCommManager < CommManager
 
             end
         end
+    
+        
+        % Function to check if system is Unix
+        function [bIsUnixFlag] = checkUnix_()
+            bIsUnixFlag = isunix();
+            if not(bIsUnixFlag)
+                warning('Called a Linux only method. Auto management of Blender Server is not available on other systems.')
+            end
+        end
     end
 
     methods (Access = protected)
         % Internal implementations
-        function self = parseYamlConfig(self, charConfigYamlFilename)
+        function self = parseYamlConfig_(self, charConfigYamlFilename)
 
             % Check if file exists
             assert(exist(charConfigYamlFilename, 'file'), "Yaml configuration file specified as input not found.")
@@ -427,14 +692,14 @@ classdef CORTOpyCommManager < CommManager
 
         end
 
-        function dImgRGB = UnpackImageFromCORTO_(self, dImgBuffer, bApplyBayerFilter)
+        function dImgRGB = unpackImageFromCORTO_(self, dImgBuffer, bApplyBayerFilter)
             arguments
                 self                (1,1)
                 dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
                 bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
             end
             %% SIGNATURE
-            % dImgRGB = UnpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)%#codegen
+            % dImgRGB = unpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)%#codegen
             % -------------------------------------------------------------------------------------------------------------
             %% DESCRIPTION
             % What the function does
@@ -469,27 +734,27 @@ classdef CORTOpyCommManager < CommManager
             dImgRGB(:,:,3) = dB;
 
             if bApplyBayerFilter
-                dImgRGB = self.ApplyBayerFilter(dImgRGB);
+                dImgRGB = self.applyBayerFilter_(dImgRGB);
             end
 
         end
 
         % TODO (PC): rework these functions!
-        function dImgBayer = ApplyBayerFilter(self, ImgRGB)
+        function dImgBayer = applyBayerFilter_(self, ImgRGB)
             % This function convert the RGB image of the environment into one generted
             % by the Milani NavCam with a 'bgrr' pattern
 
             dImgBayer = zeros(1536, 2048);
 
             % Generate the pattern of the bayer filter
-            dBayerFilter = self.CreateBayerFilter(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
+            dBayerFilter = self.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
 
             % Sample the environment RGB image with a bayer filter
-            dImgBayer = self.ApplyBayer_to_RGB(ImgRGB,dBayerFilter);
+            dImgBayer = self.applyBayer_to_RGB_(ImgRGB,dBayerFilter);
 
         end
 
-        function [img_bayer] = ApplyBayer_to_RGB(RGB, BayerFilter)
+        function [img_bayer] = applyBayer_to_RGB_(RGB, BayerFilter)
             % TODO (PC): rework legacy function
             %This function is used to apply a Bayer filter to an RGB otuput image from
             %Blender. The output image is the equivalent of an output that would have
@@ -509,7 +774,7 @@ classdef CORTOpyCommManager < CommManager
             img_bayer(:, :) = double(sum(double(RGB).*double(BayerFilter),3));
         end
 
-        function [BayerFilter] = CreateBayerFilter(img_size,pattern)
+        function [BayerFilter] = createBayerFilter_(img_size,pattern)
             % TODO (PC): rework legacy function
             %This function is used to create a BayerFilter logic array that mimic the
             %pattern of a bayer filter
