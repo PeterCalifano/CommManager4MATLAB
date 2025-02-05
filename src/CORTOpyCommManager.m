@@ -156,8 +156,20 @@ classdef CORTOpyCommManager < CommManager
                 self.terminateBlenderProcesses();
             end
         end
+        
+        % SETTERS
+        function setTargetPortUDP(self, ui32TargetPort)
+            arguments
+                self
+                ui32TargetPort                   (1,1) uint32        {isscalar, isnumeric} = 51001 % Defaut for CORTO UDP recv
+            end
 
-        % TODO: how to define destructor to terminate server process?
+            self.ui32TargetPort = ui32TargetPort;
+        end
+
+        % GETTERS
+
+        % METHODS
 
         function [outImgArrays, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
                                                          dSunAttDCM_Buffer_NavframeFromTF, ...
@@ -177,11 +189,12 @@ classdef CORTOpyCommManager < CommManager
             end
             arguments (Input)
                 kwargs.charConfigYamlFilename           (1,:)   string = ""
-                kwargs.charOutputDatatype   (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "double"
-                kwargs.ui32HorizontalSize   (1,1) uint32 {isnumeric, isscalar} = -1
-                kwargs.ui32VerticalSize     (1,1) uint32 {isnumeric, isscalar} = -1
-                kwargs.ui32NumOfBodies      (1,1) uint32 {isnumeric, isscalar} = -1
-                kwargs.ui32NumOfImgChannels (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32TargetPort                   (1,1) uint32 {isscalar, isnumeric} = 0
+                kwargs.charOutputDatatype               (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "double"
+                kwargs.ui32HorizontalSize               (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32VerticalSize                 (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32NumOfBodies                  (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32NumOfImgChannels             (1,1) uint32 {isnumeric, isscalar} = -1
             end
 
             % Parse configuration file if not already initialized or override
@@ -214,6 +227,12 @@ classdef CORTOpyCommManager < CommManager
                 ui32NumOfBodies         = kwargs.ui32NumOfBodies     ;
                 ui32NumOfImgChannels    = kwargs.ui32NumOfImgChannels;
 
+            end
+
+            if kwargs.ui32TargetPort > 0
+                % Temporarily override set target port
+                ui32PrevPort = self.ui32TargetPort;
+                self.ui32TargetPort = kwargs.ui32TargetPort;
             end
 
             % Input and validation checks 
@@ -270,6 +289,11 @@ classdef CORTOpyCommManager < CommManager
                 outImgArrays = squeeze(outImgArrays);
             end
 
+            if kwargs.ui32TargetPort > 0
+                % Reset target port to previous value
+                self.ui32TargetPort = ui32PrevPort;
+            end
+
         end
 
         % Single image rendering from disaggregated scene data
@@ -291,12 +315,19 @@ classdef CORTOpyCommManager < CommManager
             end
             arguments % kwargs arguments
                 kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.dRenderFrameOrigin              (3,1)   double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_NavFrameFromRenderFrame    (3,3)   double {ismatrix, isnumeric} = eye(3)
+                kwargs.dRenderFrameOrigin              (3,1) double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_NavFrameFromRenderFrame    (3,3) double {ismatrix, isnumeric} = eye(3)
+                kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
             end
             
             % Input size and validation checks
             assert( size(dBodiesOrigin_NavFrame, 2) == size(dBodiesAttDCM_NavFrameFromTF, 3), 'Number of bodies position does not match number of attitude matrices')
+
+            if kwargs.ui32TargetPort > 0
+                % Temporarily override set target port
+                ui32PrevPort = self.ui32TargetPort;
+                self.ui32TargetPort = kwargs.ui32TargetPort;
+            end
 
             % Determine size of vector
             dSceneDataVector = zeros(1, 7 * (2 + size(dBodiesOrigin_NavFrame, 2))); % [PQ_i] representation [SunPQ, CameraPQ, Body1PQ, ... BodyNPQ]
@@ -307,6 +338,11 @@ classdef CORTOpyCommManager < CommManager
 
             % Call renderImageFromPQ_ implementation
             [dImg, self] = self.renderImageFromPQ_(dSceneDataVector);
+
+            % Reset target port to previous state
+            if kwargs.ui32TargetPort > 0
+                self.ui32TargetPort = ui32PrevPort;
+            end
 
         end
 
@@ -320,7 +356,7 @@ classdef CORTOpyCommManager < CommManager
             % and improved flexibility of the class implementation.
 
             % Input check
-            assert( mod(dSceneDataVector, 7) == 0, ['Number of doubles to send to CORTOpy must be a multiple of 7 (PQ message). \n' ...
+            assert( mod(length(dSceneDataVector), 7) == 0, ['Number of doubles to send to CORTOpy must be a multiple of 7 (PQ message). \n' ...
                 'Required format: [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat, ... dBodyNPos, dBodyNQuat]']);
             assert( size(dSceneDataVector, 2) - 14 > 0, 'Only Sun and Camera PQ specified in dSceneData message. You should specify at least 1 body.');
 
@@ -331,7 +367,7 @@ classdef CORTOpyCommManager < CommManager
             fprintf('\n\tSent %d bytes. Image requested. Waiting for data...\n', writtenBytes)
 
             % Wait for data reception from CORTOpy
-            [~, recvDataBuffer, self] = self.ReadBuffer(); % TODO (PC) check endianness of recv
+            [~, recvDataBuffer, self] = self.ReadBuffer(); 
             % Cast data to double
             recvDataVector = typecast(recvDataBuffer, 'double');
 

@@ -39,8 +39,10 @@ charStartBlenderServerScriptPath    = "/home/peterc/devDir/projects-DART/rcs-1-g
 
 charServerAddress = 'localhost';
 ui32ServerPort = [30001, 51000]; % [TCP, UDP]
-ui32TargetPort = 51001;
+ui32TargetPort = 51001; % UDP recv
 dCommTimeout = 20;
+
+return
 
 %% CORTOpyCommManager_connectionWithoutAutoManagement
 
@@ -54,7 +56,7 @@ charStartBlenderCommand = strcat(charStartBlenderCommand, " &");
 % Make start call
 system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
 system(charStartBlenderCommand);
-pause(0.75); % Wait sockets instantiation
+pause(1); % Wait sockets instantiation
 
 % Define cortopy comm. manager object initializing in place (connection to server)
 assert(CORTOpyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1)), 'Server startup attempt failed. Test cannot continue.')
@@ -127,13 +129,27 @@ delete(objCortopyCommManager)
 return
 %% CORTOpyCommManager_renderImageFromPQ_
 
+% Instance definition with automatic management of server
+objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', false, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, 'ui32TargetPort', ui32TargetPort);
+
 % Compose scene data stuct 
 dSceneDataVector = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
 
 % Test renderImageFromPQ_ method
-dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector);
+dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector); 
+
+% TODO: fix issue in reception. The issue is that ReadBuffer assumes the sender specifies 4 bytes for the
+% message length first, but it is not the case here. --> add length as input to Read buffer, that if not 0
+% makes the class avoid the reading of the first 4 bytes.
+
 imshow(dImg);
-pause(2);
+pause(1);
+
+% Delete instance and terminate server
+delete(objCortopyCommManager)
 
 %% CORTOpyCommManager_renderImage
 % Convert Blender quaternions to DCM for testing
