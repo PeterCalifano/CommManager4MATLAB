@@ -1,6 +1,8 @@
 classdef EnumRenderingFrame
-    TARGET_BODY
-    CAMERA
-    CUSTOM_FRAME
+    enumeration
+        TARGET_BODY
+        CAMERA
+        CUSTOM_FRAME
+    end
 end
 
