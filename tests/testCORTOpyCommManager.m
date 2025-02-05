@@ -40,7 +40,8 @@ charStartBlenderServerScriptPath    = "/home/peterc/devDir/projects-DART/rcs-1-g
 charServerAddress = 'localhost';
 ui32ServerPort = [30001, 51000]; % [TCP, UDP]
 ui32TargetPort = 51001; % UDP recv
-dCommTimeout = 20;
+dCommTimeout = 30;
+i32RecvTCPsize = 4 * 2048 * 1536 * 64/8; % Number of bytes to read: 4*64*NumOfpixels
 
 return
 
@@ -126,20 +127,24 @@ objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dC
 % Delete instance and terminate server
 delete(objCortopyCommManager)
 
-return
 %% CORTOpyCommManager_renderImageFromPQ_
 
 % Instance definition with automatic management of server
 objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', false, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
-    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, 'ui32TargetPort', ui32TargetPort);
+    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i32RecvTCPsize);
 
 % Compose scene data stuct 
 dSceneDataVector = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
 
 % Test renderImageFromPQ_ method
-dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector); 
+bApplyBayerFilter = true;
+bIsImageRGB = true;
+dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector, ...
+    "bApplyBayerFilter", bApplyBayerFilter, "bIsImageRGB", bIsImageRGB); 
+
 
 % TODO: fix issue in reception. The issue is that ReadBuffer assumes the sender specifies 4 bytes for the
 % message length first, but it is not the case here. --> add length as input to Read buffer, that if not 0
@@ -148,28 +153,42 @@ dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector);
 imshow(dImg);
 pause(1);
 
-% Delete instance and terminate server
-delete(objCortopyCommManager)
-
 %% CORTOpyCommManager_renderImage
+
+% Instance definition with automatic management of server
+objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i32RecvTCPsize);
+
 % Convert Blender quaternions to DCM for testing
 
 % Assign data
-dSunVector_NavFrame = dSunPos;
-dSunAttDCM_NavframeFromTF; 
-dCameraOrigin_NavFrame = dSCPos;
-dCameraAttDCM_NavframeFromTF;
-dBodiesOrigin_NavFrame = [dBody1Pos; dBody2Pos];
-dBodiesAttDCM_NavFrameFromTF;
+dSunVector_NavFrame             = dSunPos;
+dSunAttDCM_NavframeFromTF       = quat2dcm(dSunQuat); 
+dCameraOrigin_NavFrame          = dSCPos;
+dCameraAttDCM_NavframeFromTF    = quat2dcm(dSCquat);
+dBodiesOrigin_NavFrame          = dBody1Pos;
+dBodiesAttDCM_NavFrameFromTF    = quat2dcm(dBody1Quat);
 
 % Test renderImage method
 dImg = objCortopyCommManager.renderImage(dSunVector_NavFrame, ...
                                         dSunAttDCM_NavframeFromTF, ...
-                                        dCameraOrigin_NavFrame, ...
+                                        dCameraOrigin_NavFrame', ...
                                         dCameraAttDCM_NavframeFromTF, ...
-                                        dBodiesOrigin_NavFrame, ...
+                                        dBodiesOrigin_NavFrame', ...
                                         dBodiesAttDCM_NavFrameFromTF, ...
-                                        kwargs);
+                                        "enumRenderingFrame", EnumRenderingFrame.CAMERA, ...
+                                        "bApplyBayerFilter", true, ...
+                                        "bIsImageRGB", true);
+
+imshow(dImg);
+pause(1);
+
+
+% Delete instance and terminate server
+delete(objCortopyCommManager)
 
 %% CORTOpyCommManager_renderImageSequence
 % TODO
