@@ -37,6 +37,9 @@ classdef CORTOpyCommManager < CommManager
         charCORTOpyInterfacePath            (1,1) string {mustBeA(charCORTOpyInterfacePath, ["string", "char"])}  
         charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
         
+        % Bytes to image conversion
+        bApplyBayerFilter (1,1) logical {islogical, isscalar} = false;
+        bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
 
         % Runtime flags
         bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
@@ -61,7 +64,7 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.dOutputDatagramSize              (1,1) double        {isscalar, isnumeric} = 512
                 kwargs.ui32TargetPort                   (1,1) uint32        {isscalar, isnumeric} = 0
                 kwargs.charTargetAddress                (1,:) string        {mustBeA(kwargs.charTargetAddress , ["string", "char"])} = "127.0.0.1"
-                kwargs.i32RecvTCPsize                   (1,1) int32         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
+                kwargs.i64RecvTCPsize                   (1,1) int64         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
                 kwargs.charConfigYamlFilename           (1,:) string        {mustBeA(kwargs.charConfigYamlFilename , ["string", "char"])}  = ""
                 kwargs.bAutoManageBlenderServer         (1,1) logical       {isscalar, islogical} = false
                 kwargs.charStartBlenderServerCallerPath (1,:) string        {mustBeA(kwargs.charStartBlenderServerCallerPath , ["string", "char"])} = ""
@@ -117,7 +120,7 @@ classdef CORTOpyCommManager < CommManager
                 'bUSE_PYTHON_PROTO', false, 'bUSE_CPP_PROTO', false, 'bInitInPlace', bInitInPlace, ...
                 'charTargetAddress', kwargs.charTargetAddress, 'bLittleEndianOrdering', kwargs.bLittleEndianOrdering, ...
                 'dOutputDatagramSize', kwargs.dOutputDatagramSize, 'enumCommMode', kwargs.enumCommMode, ...
-                'i32RecvTCPsize', kwargs.i32RecvTCPsize, 'ui32TargetPort',  kwargs.ui32TargetPort);
+                'i64RecvTCPsize', kwargs.i64RecvTCPsize, 'ui32TargetPort',  kwargs.ui32TargetPort);
 
             % Store paths
             self.charStartBlenderServerCallerPath = kwargs.charStartBlenderServerCallerPath;
@@ -310,7 +313,7 @@ classdef CORTOpyCommManager < CommManager
                 dSunAttDCM_NavframeFromTF       (3,3)   double {ismatrix, isnumeric}
                 dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
                 dCameraAttDCM_NavframeFromTF    (3,3)   double {ismatrix, isnumeric}
-                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeroes(3,1)
+                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeros(3,1)
                 dBodiesAttDCM_NavFrameFromTF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
             end
             arguments % kwargs arguments
@@ -318,6 +321,8 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.dRenderFrameOrigin              (3,1) double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
                 kwargs.dDCM_NavFrameFromRenderFrame    (3,3) double {ismatrix, isnumeric} = eye(3)
                 kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
+                kwargs.bApplyBayerFilter               (1,1) logical {islogical, isscalar} = false;
+                kwargs.bIsImageRGB                     (1,1) logical {islogical, isscalar} = false;
             end
             
             % Input size and validation checks
@@ -334,10 +339,12 @@ classdef CORTOpyCommManager < CommManager
 
             % Convert disaggregated scene data to dSceneData vector representation
             dSceneDataVector(:) = self.composeSceneDataVector(dSunVector_NavFrame, dSunAttDCM_NavframeFromTF, ...
-                dCameraOrigin_NavFrame, dCameraAttDCM_NavframeFromTF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromTF, 'enumRenderingFrame', kwargs.enumRenderingFrame, 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, 'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
+                dCameraOrigin_NavFrame, dCameraAttDCM_NavframeFromTF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromTF, ...
+                'enumRenderingFrame', kwargs.enumRenderingFrame, 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, 'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
 
             % Call renderImageFromPQ_ implementation
-            [dImg, self] = self.renderImageFromPQ_(dSceneDataVector);
+            [dImg, self] = self.renderImageFromPQ_(dSceneDataVector, ...
+                "bApplyBayerFilter", kwargs.bApplyBayerFilter, "bIsImageRGB", kwargs.bIsImageRGB);
 
             % Reset target port to previous state
             if kwargs.ui32TargetPort > 0
@@ -347,13 +354,26 @@ classdef CORTOpyCommManager < CommManager
         end
 
 
-        function [dImg, self] = renderImageFromPQ_(self, dSceneDataVector)
+        function [dImg, self] = renderImageFromPQ_(self, dSceneDataVector, options)
             arguments
                 self       (1,1)
                 dSceneDataVector (1,:) double {isvector, isnumeric}
             end
+            arguments
+                options.bApplyBayerFilter (1,1) logical {islogical, isscalar} = false; 
+                options.bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
+            end
             % NOTE: this class is intended as internal method, but left exposed for advanced users
             % and improved flexibility of the class implementation.
+            
+            if nargin > 1
+                bApplyBayerFilter_   = options.bApplyBayerFilter; 
+                bIsImageRGB_         = options.bIsImageRGB      ;
+            else
+                % LOAD FROM SELF
+                bApplyBayerFilter_   = self.bApplyBayerFilter;
+                bIsImageRGB_         = self.bIsImageRGB;
+            end
 
             % Input check
             assert( mod(length(dSceneDataVector), 7) == 0, ['Number of doubles to send to CORTOpy must be a multiple of 7 (PQ message). \n' ...
@@ -373,7 +393,7 @@ classdef CORTOpyCommManager < CommManager
 
             % Cast buffer to double and display image % TODO (PC): TBC if to keep here. May be moved to
             % acquireFrame of frontend algorithm branch?
-            dImg = unpackImageFromCORTO(recvDataVector);
+            dImg = self.unpackImageFromCORTO(recvDataVector, bApplyBayerFilter_, bIsImageRGB_);
 
         end
 
@@ -407,6 +427,35 @@ classdef CORTOpyCommManager < CommManager
             end
             % Call static termination method
             CORTOpyCommManager.terminateBlenderProcessesStatic()
+        end
+
+
+        % TODO (PC) make this function generic. Currently only for Milani NavCam!
+        function dImg = unpackImageFromCORTO(self, dImgBuffer, bApplyBayerFilter, bIsImageRGB)
+            arguments
+                self 
+                dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
+                bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
+                bIsImageRGB         (1,1) logical {islogical, isscalar} = false;
+            end
+
+            if bIsImageRGB
+                % Call external function
+                dImg = self.unpackImageFromCORTO_impl(dImgBuffer, bApplyBayerFilter);
+            else
+                
+                % TODO (PC) You will need to modify the input to the class/function
+                % Implement and verify
+                ui32ImgHeight   = 2048;
+                ui32ImgWidth    = 1536;
+
+                dImg = zeros(ui32ImgHeight, ui32ImgWidth, 'double');
+                dImg(:, :) = reshape(transpose(dImgBuffer), ui32ImgHeight, ui32ImgWidth);
+
+                % error('Not implemented yet. Requires size of camera to be known!')
+                % dImg = zeros(1536, 2048, 3, 'uint8');
+
+            end
         end
 
     end
@@ -560,7 +609,7 @@ classdef CORTOpyCommManager < CommManager
                 dBodiesAttDCM_NavFrameFromTF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
             end
             arguments % kwargs arguments
-                kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.enumRenderingFrame              (1,1)    EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
                 kwargs.dRenderFrameOrigin              (3,1)   double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
                 kwargs.dDCM_NavFrameFromRenderFrame    (3,3)   double {ismatrix, isnumeric} = eye(3)
             end
@@ -569,25 +618,45 @@ classdef CORTOpyCommManager < CommManager
             ui32NumOfBodies = size(dBodiesOrigin_NavFrame, 2);
             assert(size(dBodiesAttDCM_NavFrameFromTF, 3) == ui32NumOfBodies, 'Unmatched number of bodies in Position and Attitude DCM arrays. Please check input data.');
             
+            % TODO: based on selected rendering frame, assert identity and origin
+            if kwargs.enumRenderingFrame == EnumRenderingFrame.CAMERA
+
+                assert( all(dCameraOrigin_NavFrame == 0, 'all') );
+                assert( all(dCameraAttDCM_NavframeFromTF == eye(3), 'all') )
+    
+            elseif kwargs.enumRenderingFrame == EnumRenderingFrame.TARGET_BODY
+
+                assert( all(dBodiesOrigin_NavFrame(:, 1) == 0, 'all') );
+                assert( all(dBodiesAttDCM_NavFrameFromTF(:,:,1) == eye(3), 'all') )
+    
+            else
+                error('Invalid or unsupported type of rendering frame')
+            end
+
             % Convert all attitude matrices to quaternions used by Blender
-            dSunQuaternion_ToNavFrame
-            dCameraQuaternion_ToNavFrame
-            dBodiesQuaternion_ToNavFrame
+            dSunQuaternion_ToNavFrame    = DCM2quat(dSunAttDCM_NavframeFromTF, false);
+            dCameraQuaternion_ToNavFrame = DCM2quat(dCameraAttDCM_NavframeFromTF, false);
+                
+            dBodiesQuaternion_ToNavFrame = zeros(4, ui32NumOfBodies);
+
+            for idB = 1:ui32NumOfBodies
+                dBodiesQuaternion_ToNavFrame(:, idB) = DCM2quat(dBodiesAttDCM_NavFrameFromTF, false);
+            end
 
             % Compose output vector
             dSceneDataVector = zeros(1, 14 + ui32NumOfBodies * 7);
             
             % Allocate Sun PQ
-            dSceneDataVector(1:7) = [dSunVector_NavFrame, dSunQuaternion];
+            dSceneDataVector(1:7) = [dSunVector_NavFrame; dSunQuaternion_ToNavFrame];
             % Allocate Camera PQ
-            dSceneDataVector(8:14) = [dCameraOrigin_NavFrame, dCameraQuaternion];
+            dSceneDataVector(8:14) = [dCameraOrigin_NavFrame; dCameraQuaternion_ToNavFrame];
 
             % Allocate bodies PQ
             ui32bodiesAllocPtr = uint32(15);
             ui32DeltaPQ = uint32(7);
 
             for idB = 1:ui32NumOfBodies
-                dSceneDataVector(ui32bodiesAllocPtr : ui32bodiesAllocPtr + 7) = [dBodiesOrigin_NavFrame(1:3, idB); dBodiesQuaternion_ToNavFrame(1:4, idB)];
+                dSceneDataVector(ui32bodiesAllocPtr : ui32bodiesAllocPtr + 6) = [dBodiesOrigin_NavFrame(1:3, idB); dBodiesQuaternion_ToNavFrame(1:4, idB)];
                 ui32bodiesAllocPtr = ui32bodiesAllocPtr + ui32DeltaPQ;
             end
 
@@ -680,8 +749,8 @@ classdef CORTOpyCommManager < CommManager
 
         end
 
-                % TODO (PC) make this function generic. Currently only for Milani NavCam!
-        function dImg = unpackImageFromCORTO(dImgBuffer, bApplyBayerFilter, bIsImageRGB)
+        % TODO (PC) make this function generic. Currently only for Milani NavCam!
+        function dImg = unpackImageFromCORTO_Static(dImgBuffer, bApplyBayerFilter, bIsImageRGB)
             arguments
                 dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
                 bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
@@ -690,7 +759,7 @@ classdef CORTOpyCommManager < CommManager
 
             if bIsImageRGB
                 % Call external function
-                dImg = unpackImageFromCORTO_(dImgBuffer, bApplyBayerFilter);
+                dImg = unpackImageFromCORTO2_(dImgBuffer, bApplyBayerFilter);
             else
                 % TODO (PC) You will need to modiy the input to the class/function
                 error('Not implemented yet. Requires size of camera to be known!')
@@ -728,7 +797,7 @@ classdef CORTOpyCommManager < CommManager
 
         end
 
-        function dImgRGB = unpackImageFromCORTO_(self, dImgBuffer, bApplyBayerFilter)
+        function dImgRGB = unpackImageFromCORTO_impl(self, dImgBuffer, bApplyBayerFilter)
             arguments
                 self                (1,1)
                 dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
@@ -783,12 +852,17 @@ classdef CORTOpyCommManager < CommManager
             dImgBayer = zeros(1536, 2048);
 
             % Generate the pattern of the bayer filter
-            dBayerFilter = self.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
+            dBayerFilter = CORTOpyCommManager.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
 
             % Sample the environment RGB image with a bayer filter
-            dImgBayer = self.applyBayer_to_RGB_(ImgRGB,dBayerFilter);
+            dImgBayer = CORTOpyCommManager.applyBayer_to_RGB_(ImgRGB,dBayerFilter);
 
         end
+
+    end % End of methods section
+
+
+    methods (Static, Access = public)
 
         function [img_bayer] = applyBayer_to_RGB_(RGB, BayerFilter)
             % TODO (PC): rework legacy function
@@ -810,7 +884,7 @@ classdef CORTOpyCommManager < CommManager
             img_bayer(:, :) = double(sum(double(RGB).*double(BayerFilter),3));
         end
 
-        function [BayerFilter] = createBayerFilter_(img_size,pattern)
+        function [BayerFilter] = createBayerFilter_(img_size, pattern)
             % TODO (PC): rework legacy function
             %This function is used to create a BayerFilter logic array that mimic the
             %pattern of a bayer filter
@@ -859,6 +933,5 @@ classdef CORTOpyCommManager < CommManager
             end
         end
 
-    end % End of methods section
-
+    end
 end
