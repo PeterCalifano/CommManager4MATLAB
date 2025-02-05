@@ -61,7 +61,7 @@ classdef CommManager < handle
 
         charTargetAddress = "127.0.0.1"
         ui32TargetPort = 0
-        i32RecvTCPsize = -1;
+        i64RecvTCPsize = int64(-1);
 
         % Serializers options (TODO: modify, these do nothing for now)
         bUSE_PYTHON_PROTO = true;
@@ -99,7 +99,7 @@ classdef CommManager < handle
                 kwargs.dOutputDatagramSize      (1,1) double        {isscalar, isnumeric} = 512     
                 kwargs.ui32TargetPort           (1,1) uint32        {isscalar, isnumeric} = 0
                 kwargs.charTargetAddress        (1,:) string        {isscalar, isnumeric} = "127.0.0.1"
-                kwargs.i32RecvTCPsize           (1,1) int32         {isscalar, isnumeric} = -1; 
+                kwargs.i64RecvTCPsize           (1,1) int64         {isscalar, isnumeric} = -1; 
             end
             
             fprintf('\nCreating communication manager object... \n')
@@ -114,7 +114,7 @@ classdef CommManager < handle
             self.ui32TargetPort     = kwargs.ui32TargetPort;
 
             % Fixed size buffer for TCP recv
-            self.i32RecvTCPsize = kwargs.i32RecvTCPsize;
+            self.i64RecvTCPsize = kwargs.i64RecvTCPsize;
 
             % Assign server properties
             self.bUSE_PYTHON_PROTO      = kwargs.bUSE_PYTHON_PROTO;
@@ -271,32 +271,44 @@ classdef CommManager < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Method to read data to buffer
-        function [recvBytes, recvDataBuffer, self] = ReadBuffer(self)
+        function [recvBytes, recvDataBuffer, self] = ReadBuffer(self, i64BytesSizeToRead)
+            arguments
+                self
+                i64BytesSizeToRead (1,1) int64 {isscalar, isnumeric} = -1
+            end
             
             self.assertInit();
+
+            % Read size override mode
+            if i64BytesSizeToRead ~= -1
+                % Store previously set read size
+                i64PrevRecvTCPsize = self.i64RecvTCPsize;
+                self.i64RecvTCPsize = int64(i64BytesSizeToRead);
+            end
 
             if  self.enumCommMode == EnumCommMode.TCP || self.enumCommMode == EnumCommMode.UDP_TCP
                 % TCP-recv communication
                 try
-                    if self.i32RecvTCPsize == -1
+                    if self.i64RecvTCPsize == -1
+
                         % Read first 4 bytes to get message buffer length
                         recvBytes   = read(self.objTCPclient, 4, 'uint8');
                         recvBytes   = typecast(recvBytes, 'uint32');
 
-                        if recvBytes >= uint32(4294967295) % Check for potential overflow
-                            warning('Possible overflow: Received message buffer length is greater than or equal to the maximum value of uint32 (4294967295).');
-                        end
-
                         if recvBytes == 0
-                            warning('Read recv buffer length from remote server, but equal to 0. Something may have gone wrong or did you forget to fix "i32RecvTCPsize" field?');
+                            warning('Read recv buffer length from remote server, but equal to 0. Something may have gone wrong or did you forget to fix "i64RecvTCPsize" field?');
                         end
 
-                    elseif self.i32RecvTCPsize == -5 % Special "Eager" MODE: get all bytes
+                    elseif self.i64RecvTCPsize == -5 % Special "Eager" MODE: get all bytes
                         % TODO (PC) not easy at it may seem: read is blocking, but if there exists latency
-                        % between when this cliend reaches it and the time the server writes something to
+                        % between when this client reaches it and the time the server writes something to
                         % buffer, this mode would break apart entirely. 
                     else
-                        recvBytes = self.i32RecvTCPsize; % Use specified size to receive
+                        recvBytes = self.i64RecvTCPsize; % Use specified size to receive
+                    end
+
+                    if recvBytes >= int64(1e20) % Check for potential overflow
+                        warning('Possible overflow: Received message buffer length is greater than or equal to the maximum value of int64 (9223372036854775807).');
                     end
 
                     assert(recvBytes >= 0, 'Error: Received/set message buffer length is invalid (zero or negative).');
@@ -306,8 +318,8 @@ classdef CommManager < handle
 
                     if self.objTCPclient.NumBytesAvailable > 0 
 
-                        if self.objTCPclient.NumBytesAvailable > self.i32RecvTCPsize
-                            warning('Read user-specified number of bytes %d, but buffer contains %d > %d', self.i32RecvTCPsize, self.objTCPclient.NumBytesAvailable, self.i32RecvTCPsize)
+                        if self.objTCPclient.NumBytesAvailable > self.i64RecvTCPsize
+                            warning('Read user-specified number of bytes %d, but buffer contains %d > %d', self.i64RecvTCPsize, self.objTCPclient.NumBytesAvailable, self.i64RecvTCPsize)
                         elseif self.objTCPclient.NumBytesAvailable > recvBytes
                             warning('Read number of bytes %d as specified by message header, but buffer contains %d > %d', recvBytes, self.objTCPclient.NumBytesAvailable, recvBytes)
                         end
@@ -318,7 +330,7 @@ classdef CommManager < handle
                     disp(ME.message);
                     if contains(ME.identifier, 'timeout', 'IgnoreCase', true)
                         fprintf(['\nDo you need to recv a fixed size buffer of known size and/or the first 4 bytes do not specify the length? \n' ...
-                            'Please specify "i32RecvTCPsize" kwarg at class instantiation to enable this TCP recv mode!.\n']);
+                            'Please specify "i64RecvTCPsize" kwarg at class instantiation to enable this TCP recv mode!.\n']);
                     end
                     error(ME)
                 end
@@ -328,6 +340,11 @@ classdef CommManager < handle
 
                 % Flush data from buffer
                 flush(self.objTCPclient, "input");
+
+                % Restore previously set TCP recv size if override mode
+                if exist('i64PrevRecvTCPsize', 'var')
+                    self.i64RecvTCPsize = i64PrevRecvTCPsize;
+                end
 
             elseif self.enumCommMode == EnumCommMode.UDP 
 
