@@ -43,6 +43,9 @@ ui32TargetPort = 51001; % UDP recv
 dCommTimeout = 30;
 i32RecvTCPsize = 4 * 2048 * 1536 * 64/8; % Number of bytes to read: 4*64*NumOfpixels
 
+% Define path to configuration file
+charConfigYamlFilename = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/CORTO_SLX_CONFIG.yml";
+
 return
 
 %% CORTOpyCommManager_connectionWithoutAutoManagement
@@ -152,6 +155,7 @@ dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector, ...
 
 imshow(dImg);
 pause(1);
+delete(objCortopyCommManager)
 
 %% CORTOpyCommManager_renderImage
 
@@ -192,4 +196,26 @@ delete(objCortopyCommManager)
 
 %% CORTOpyCommManager_renderImageSequence
 % TODO
+
+
+%% CORTOpyCommManager_configParsingFromYaml
+
+objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', false, ...
+    'charBlenderModelPath', charBlenderModelPath, ...
+    "charConfigYamlFilename", charConfigYamlFilename, ...
+    'bAutoManageBlenderServer', false, ...
+    'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
+    'ui32TargetPort', ui32TargetPort, ...
+    'i64RecvTCPsize', i32RecvTCPsize);
+
+
+
+
+
+
+
+
+
 

@@ -25,8 +25,7 @@ classdef CORTOpyCommManager < CommManager
 
 
     properties (SetAccess = protected, GetAccess = public)
-        % 
-        charConfigYamlFilename
+        
         % ui32BlenderRecvPort % Get from yaml file else from input
         % ui32ServerPort % Get from yaml if specified else from input % Defined in superclass
 
@@ -791,6 +790,9 @@ classdef CORTOpyCommManager < CommManager
             if strcmpi(charExt, "")
                 charConfigYamlFilename = strcat(charConfigYamlFilename, ".yaml");
             end
+            
+            % Store path to yaml file
+            self.charConfigYamlFilename = charConfigYamlFilename;
 
             % Load file using yaml community library
             self.strConfigFromYaml = yaml.loadFile(charConfigYamlFilename);

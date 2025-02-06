@@ -49,9 +49,12 @@ classdef CommManager < handle
     %% PUBLIC DATA MEMBERS
     
     properties (SetAccess = protected, GetAccess = public)
-        % Common data members
+        % CONFIGURATION data members
+        charConfigYamlFilename 
+        strConfigFromYaml       {isstruct}
+
         charServerAddress
-        ui32ServerPort
+        ui32ServerPort          {isnumeric}
         dCommTimeout
         enumCommMode
         ui8CommMode = 0; % TODO (PC) check if still needed by subclasses
