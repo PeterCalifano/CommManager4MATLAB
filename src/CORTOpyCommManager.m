@@ -28,7 +28,7 @@ classdef CORTOpyCommManager < CommManager
         
         % ui32BlenderRecvPort % Get from yaml file else from input
         % ui32ServerPort % Get from yaml if specified else from input % Defined in superclass
-
+        
         % Configuration
         bSendLogToShellPipe                     (1,1) logical {islogical, isscalar} = false % FIXME, not working is true due to system call failure
 
@@ -36,9 +36,12 @@ classdef CORTOpyCommManager < CommManager
         charCORTOpyInterfacePath            (1,1) string {mustBeA(charCORTOpyInterfacePath, ["string", "char"])}  
         charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
         
-        % Bytes to image conversion
+        % Bytes to image conversion params
+        objCameraIntrinsics 
         bApplyBayerFilter (1,1) logical {islogical, isscalar} = false;
         bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
+
+        enumCommDataType (1,1) {mustBeA(enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.DOUBLE
 
         % Runtime flags
         bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
@@ -46,8 +49,8 @@ classdef CORTOpyCommManager < CommManager
     end
 
 
+    %% PUBLIC methods
     methods (Access = public)
-        % PUBLIC methods
         % CONSTRUCTOR
         function self = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
@@ -69,7 +72,8 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.charStartBlenderServerCallerPath (1,:) string        {mustBeA(kwargs.charStartBlenderServerCallerPath , ["string", "char"])} = ""
                 kwargs.charBlenderModelPath             (1,:) string        {mustBeA(kwargs.charBlenderModelPath , ["string", "char"])} = ""
                 kwargs.charCORTOpyInterfacePath         (1,:) string        {mustBeA(kwargs.charCORTOpyInterfacePath , ["string", "char"])} = ""
-                kwargs.objCameraIntrisincs              (1,1) {mustBeA(kwargs.objCameraIntrisincs, ["CCameraIntrinstics", "cameraIntrinsics"])} = CCameraIntrinsics()
+                kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinstics")} = CCameraIntrinsics()
+                kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
             end
 
             bIsValidServerAutoManegementConfig = false;
@@ -139,6 +143,68 @@ classdef CORTOpyCommManager < CommManager
                 self.parseYamlConfig_(kwargs.charConfigYamlFilename);
             end
 
+            % Load camera data from object, yaml config or default data (Milani NavCam)
+            % Input object overrides all
+            if not(kwargs.objCameraIntrisincs.bDefaultConstructed)
+                fprintf('\nCamera parameters initialized from input object.\n')
+                self.objCameraIntrinsics = kwargs.objCameraIntrisincs;
+
+                if not(strcmpi(kwargs.charConfigYamlFilename, ""))
+                    warning('Both camera object and yaml configuration file specified. Camera object overrides parameters. Please remove it if this is unintended.')
+                end
+
+            elseif kwargs.objCameraIntrisincs.bDefaultConstructed && not(strcmpi(kwargs.charConfigYamlFilename, ""))
+                fprintf('\nCamera parameters initialized from yaml configuration file.\n')
+                % Get params from file
+
+                % Construct camera intrinsics object and assign
+                % TODO --> need to add constructor from fov TBD
+
+                % self.strConfigFromYaml.Camera_Params.FOV_x;
+                % self.strConfigFromYaml.Camera_Params.FOV_Y;
+                % self.strConfigFromYaml.Camera_Params.sensor_size_x
+                % self.strConfigFromYaml.Camera_Params.sensor_size_y
+
+                % self.ui32NumOfChannels = self.strConfigFromYaml.Camera_Params.n_channels;
+
+                % self.objCameraIntrinsics = CCameraIntrinsics();
+                error('Not yet implemented >.<')
+
+            else
+                % Assume Milani NavCam parameters
+                warning('No camera object nor yaml configuration file specified. Assuming Milani NavCam parameters.')
+                error('Not yet implemented >.<')
+
+                dFocalLength
+                ui32ImageSize = [2048, 1536];
+                dPrincipalPoint = double(ui32ImageSize)/2;
+
+                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength, dPrincipalPoint, ui32ImageSize);
+            end
+
+            % Determine transmission dtype
+            % Input kwargs overrides all
+            if not(kwargs.enumCommDataType == EnumCommDataType.UNSET)
+                self.enumCommDataType  = kwargs.enumCommDataType;
+
+                if not(strcmpi(kwargs.charConfigYamlFilename, ""))
+                    warning('Both datatype option and yaml configuration file specified. Input datatype overrides specification. Please remove it if this is unintended.')
+                end
+
+            elseif not(strcmpi(kwargs.charConfigYamlFilename, ""))
+            
+
+            end
+
+            % If not specified, determine recv size of image
+            if not(kwargs.i64RecvTCPsize ~= -1) 
+                % TODO: how to distinguish case actual -1 case from "autocompute" case?
+
+            end
+
+            % Print camera parameters for monitoring
+            self.printCameraParams()
+
             % Check if initialization in place is configured correctly
             if kwargs.bInitInPlace && kwargs.ui32TargetPort == 0
                 warning(['You requested connection of TCP at instantiation of class, but no ui32TargetPort was specified. ' ...
@@ -171,6 +237,31 @@ classdef CORTOpyCommManager < CommManager
         end
 
         % GETTERS
+        function printCameraParams(self)
+            fprintf("\nCORTOpyCommManager will use the following camera parameters:\n");
+
+            % Focal Length
+            fprintf(" - Focal length: [%.2f, %.2f] [mm or px] (X, Y)\n", self.objCameraIntrinsics.FocalLength(1), self.objCameraIntrinsics.FocalLength(2));
+
+            % Field of View (FoV)
+            fprintf(" - Field of View (FoV): [%.2f, %.2f] degrees (X, Y)\n", rad2deg(self.objCameraIntrinsics.dFovHW(1)), rad2deg(self.objCameraIntrinsics.dFovHW(2)));
+
+            % Image Size
+            fprintf(" - Image size: [%d, %d] pixels (Width X, Height Y)\n", self.objCameraIntrinsics.ImageSize(1), self.objCameraIntrinsics.ImageSize(2));
+
+            % Image Type
+            if self.bIsImageRGB
+                fprintf(" - Image type: RGB (3-4 channels). Blender will send 4 channels (with Alpha)\n");
+            else
+                fprintf(" - Image type: Grayscale (1 channel)\n");
+            end
+
+            % Image Data Type
+            fprintf(" - Image data type for transmission: %s\n", self.enumCommDataType);
+
+            % Assumed Buffer Size for TCP Transmission
+            fprintf(" - Assumed buffer size for TCP transmission: %d bytes\n", self.i64RecvTCPsize);
+        end
 
         % METHODS
 
@@ -459,7 +550,76 @@ classdef CORTOpyCommManager < CommManager
         end
 
     end
+    
+    %% PROTECTED
+    methods (Access = protected)
+        % Internal implementations
+        function dImgRGB = unpackImageFromCORTO_impl(self, dImgBuffer, bApplyBayerFilter)
+            arguments
+                self                (1,1)
+                dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
+                bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
+            end
+            %% SIGNATURE
+            % dImgRGB = unpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)%#codegen
+            % -------------------------------------------------------------------------------------------------------------
+            %% DESCRIPTION
+            % What the function does
+            % -------------------------------------------------------------------------------------------------------------
+            %% INPUT
+            % dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
+            % bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
+            % -------------------------------------------------------------------------------------------------------------
+            %% OUTPUT
+            % dImg
+            % -------------------------------------------------------------------------------------------------------------
+            %% CHANGELOG
+            % First author: Milani GNC Team (M. Pugliatti, A. Rizza, F. Piccolo) for milani-gnc prototype
+            % 13-01-2025    Pietro Califano     Adapted from legacy code of milani-gnc
+            % -------------------------------------------------------------------------------------------------------------
 
+            dImgRGB = zeros(1536, 2048, 3, 'double');
+
+            % Decompose the ImgPackage in the 4 RGBA channels
+            dR = dImgBuffer(1:4:end);
+            dG = dImgBuffer(2:4:end);
+            dB = dImgBuffer(3:4:end);
+
+            % Reshape the RGB channels as matrix
+            dR = (flip(reshape(dR',2048,1536),2))';
+            dG = (flip(reshape(dG',2048,1536),2))';
+            dB = (flip(reshape(dB',2048,1536),2))';
+
+            % Compose the RGB tensor
+            dImgRGB(:,:,1) = dR;
+            dImgRGB(:,:,2) = dG;
+            dImgRGB(:,:,3) = dB;
+
+            if bApplyBayerFilter
+                dImgRGB = self.applyBayerFilter_(dImgRGB);
+            end
+
+        end
+
+        % TODO (PC): rework these functions!
+        function dImgBayer = applyBayerFilter_(self, ImgRGB)
+            % This function convert the RGB image of the environment into one generted
+            % by the Milani NavCam with a 'bgrr' pattern
+
+            dImgBayer = zeros(1536, 2048);
+
+            % Generate the pattern of the bayer filter
+            dBayerFilter = CORTOpyCommManager.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
+
+            % Sample the environment RGB image with a bayer filter
+            dImgBayer = CORTOpyCommManager.applyBayer_to_RGB_(ImgRGB,dBayerFilter);
+
+        end
+
+    end % End of methods section
+
+    
+    %% STATIC PUBLIC
     methods (Static, Access = public)
 
         % Method to start blender server
@@ -777,73 +937,7 @@ classdef CORTOpyCommManager < CommManager
             end
         end
     end
-
-    methods (Access = protected)
-        % Internal implementations
-        function dImgRGB = unpackImageFromCORTO_impl(self, dImgBuffer, bApplyBayerFilter)
-            arguments
-                self                (1,1)
-                dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
-                bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
-            end
-            %% SIGNATURE
-            % dImgRGB = unpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)%#codegen
-            % -------------------------------------------------------------------------------------------------------------
-            %% DESCRIPTION
-            % What the function does
-            % -------------------------------------------------------------------------------------------------------------
-            %% INPUT
-            % dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
-            % bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
-            % -------------------------------------------------------------------------------------------------------------
-            %% OUTPUT
-            % dImg
-            % -------------------------------------------------------------------------------------------------------------
-            %% CHANGELOG
-            % First author: Milani GNC Team (M. Pugliatti, A. Rizza, F. Piccolo) for milani-gnc prototype
-            % 13-01-2025    Pietro Califano     Adapted from legacy code of milani-gnc
-            % -------------------------------------------------------------------------------------------------------------
-
-            dImgRGB = zeros(1536, 2048, 3, 'double');
-
-            % Decompose the ImgPackage in the 4 RGBA channels
-            dR = dImgBuffer(1:4:end);
-            dG = dImgBuffer(2:4:end);
-            dB = dImgBuffer(3:4:end);
-
-            % Reshape the RGB channels as matrix
-            dR = (flip(reshape(dR',2048,1536),2))';
-            dG = (flip(reshape(dG',2048,1536),2))';
-            dB = (flip(reshape(dB',2048,1536),2))';
-
-            % Compose the RGB tensor
-            dImgRGB(:,:,1) = dR;
-            dImgRGB(:,:,2) = dG;
-            dImgRGB(:,:,3) = dB;
-
-            if bApplyBayerFilter
-                dImgRGB = self.applyBayerFilter_(dImgRGB);
-            end
-
-        end
-
-        % TODO (PC): rework these functions!
-        function dImgBayer = applyBayerFilter_(self, ImgRGB)
-            % This function convert the RGB image of the environment into one generted
-            % by the Milani NavCam with a 'bgrr' pattern
-
-            dImgBayer = zeros(1536, 2048);
-
-            % Generate the pattern of the bayer filter
-            dBayerFilter = CORTOpyCommManager.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
-
-            % Sample the environment RGB image with a bayer filter
-            dImgBayer = CORTOpyCommManager.applyBayer_to_RGB_(ImgRGB,dBayerFilter);
-
-        end
-
-    end % End of methods section
-
+    
 
     methods (Static, Access = public)
 

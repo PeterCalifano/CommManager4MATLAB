@@ -51,7 +51,7 @@ classdef CommManager < handle
     
     properties (SetAccess = protected, GetAccess = public)
         % CONFIGURATION data members
-        charConfigYamlFilename 
+        charConfigYamlFilename = ""
         strConfigFromYaml       {isstruct} = struct()
 
         charServerAddress
