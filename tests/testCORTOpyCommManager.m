@@ -43,9 +43,6 @@ ui32TargetPort = 51001; % UDP recv
 dCommTimeout = 30;
 i32RecvTCPsize = 4 * 2048 * 1536 * 64/8; % Number of bytes to read: 4*64*NumOfpixels
 
-% Define path to configuration file
-charConfigYamlFilename = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/CORTO_SLX_CONFIG.yml";
-
 return
 
 %% CORTOpyCommManager_connectionWithoutAutoManagement
@@ -95,6 +92,7 @@ else
 end
 
 clear objCortopyCommManager 
+return
 
 %% CORTOpyCommManager_serverManagementMethods
 objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
@@ -120,6 +118,7 @@ assert(bIsRunning)
 % Terminate server manually
 objCortopyCommManager.terminateBlenderProcessesStatic()
 
+return
 %% CORTOpyCommManager_serverAutoManagement
 % Instance definition with automatic management of server
 objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
@@ -129,7 +128,7 @@ objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dC
 
 % Delete instance and terminate server
 delete(objCortopyCommManager)
-
+return
 %% CORTOpyCommManager_renderImageFromPQ_
 
 % Instance definition with automatic management of server
@@ -155,7 +154,6 @@ dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector, ...
 
 imshow(dImg);
 pause(1);
-delete(objCortopyCommManager)
 
 %% CORTOpyCommManager_renderImage
 
@@ -166,9 +164,10 @@ objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dC
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i32RecvTCPsize);
 
-% Convert Blender quaternions to DCM for testing
 
 % Assign data
+% Nav frame is CAMERA frame
+% Convert Blender quaternions to DCM for testing
 dSunVector_NavFrame             = dSunPos;
 dSunAttDCM_NavframeFromTF       = quat2dcm(dSunQuat); 
 dCameraOrigin_NavFrame          = dSCPos;
@@ -195,23 +194,41 @@ pause(1);
 delete(objCortopyCommManager)
 
 %% CORTOpyCommManager_renderImageSequence
-% TODO
+
+% TODO: load setup for SLAM simulations
 
 
-%% CORTOpyCommManager_configParsingFromYaml
+% Overwrite model definition
+charBlenderModelPath
 
+% Instance definition with automatic management of server
 objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
-    'bInitInPlace', false, ...
-    'charBlenderModelPath', charBlenderModelPath, ...
-    "charConfigYamlFilename", charConfigYamlFilename, ...
-    'bAutoManageBlenderServer', false, ...
-    'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
-    'ui32TargetPort', ui32TargetPort, ...
-    'i64RecvTCPsize', i32RecvTCPsize);
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i32RecvTCPsize);
 
 
+% Assign data
+% Nav frame is TARGET BODY frame
+% Convert Blender quaternions to DCM for testing
+dSunVector_Buffer_NavFrame             = dSunPositions_TB;
+dSunAttDCM_Buffer_NavframeFromTF       = quat2dcm(dSunQuat); 
+dCameraOrigin_Buffer_NavFrame          = dSCPos;
+dCameraAttDCM_Buffer_NavframeFromTF    = quat2dcm(dSCquat);
+dBodiesOrigin_Buffer_NavFrame          = dBody1Pos;
+dBodiesAttDCM_Buffer_NavFrameFromTF    = quat2dcm(dBody1Quat);
 
+% Test renderImage method
+dImg = objCortopyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
+                                                 dSunAttDCM_Buffer_NavframeFromTF, ...
+                                                 dCameraOrigin_Buffer_NavFrame', ...
+                                                 dCameraAttDCM_Buffer_NavframeFromTF, ...
+                                                 dBodiesOrigin_Buffer_NavFrame', ...
+                                                 dBodiesAttDCM_Buffer_NavFrameFromTF, ...
+                                                 "enumRenderingFrame", EnumRenderingFrame.TARGET_BODY, ...
+                                                 "bApplyBayerFilter", true, ...
+                                                 "bIsImageRGB", true);
 
 
 

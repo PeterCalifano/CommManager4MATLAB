@@ -287,7 +287,7 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.charOutputDatatype               (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "double"
                 kwargs.ui32HorizontalSize               (1,1) uint32 {isnumeric, isscalar} = -1
                 kwargs.ui32VerticalSize                 (1,1) uint32 {isnumeric, isscalar} = -1
-                kwargs.ui32NumOfBodies                  (1,1) uint32 {isnumeric, isscalar} = -1
+                kwargs.ui32NumOfBodies                  (1,1) uint32 {isnumeric, isscalar} = 1
                 kwargs.ui32NumOfImgChannels             (1,1) uint32 {isnumeric, isscalar} = -1
             end
 
