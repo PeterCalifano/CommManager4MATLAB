@@ -37,6 +37,7 @@ classdef CommManager < handle
     % 24-11-2024        Pietro Califano     Moved to dedicated repo on GitHub for new dev. course: CommManager4MATLAB
     % 18-12-2024        Pietro Califano     Added methods to use msg-pack library for serialization/de-serialization
     % 13-01-2025        Pietro Califano     Add functionalities to support UDP communications
+    % 06-02-2025        Pietro Califano     Add functionality to parse and store yaml config file
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % [-]
@@ -51,7 +52,7 @@ classdef CommManager < handle
     properties (SetAccess = protected, GetAccess = public)
         % CONFIGURATION data members
         charConfigYamlFilename 
-        strConfigFromYaml       {isstruct}
+        strConfigFromYaml       {isstruct} = struct()
 
         charServerAddress
         ui32ServerPort          {isnumeric}
@@ -414,17 +415,41 @@ classdef CommManager < handle
         
     end
     
+    methods (Access = public)
+
+        function self = parseYamlConfig_(self, charConfigYamlFilename)
+
+            % Check if file exists
+            assert(exist(charConfigYamlFilename, 'file'), "Yaml configuration file specified as input not found.")
+
+            % Check if it has file extension, else add
+            [~, ~, charExt] = fileparts(charConfigYamlFilename);
+
+            if strcmpi(charExt, "")
+                charConfigYamlFilename = strcat(charConfigYamlFilename, ".yaml");
+            end
+
+            % Store path to yaml file
+            self.charConfigYamlFilename = charConfigYamlFilename;
+
+            % Load file using yaml community library
+            self.strConfigFromYaml = yaml.loadFile(charConfigYamlFilename);
+
+        end
+    end
+
     methods (Access = protected)
+
         % DEVNOTE: may be implemented by overloading/overriding the subsref method such that it gets called
         % at each dot indexing (properties included) automatically.
         function assertInit(self)
             assert(self.bCommManagerReady == true, 'Class not initialized correctly. You need to establish connection before use! Call instance.Initialize() or pass flag bInitInPlace as true.')
         end
-        
+
         function bIsValid = isValidDataStruct(objdataStructToWrite)
-            % TEMPORARY: to be implemented
+            % TODO: not used, to be implemented
             bIsValid = true;
         end
     end
-    
+
 end

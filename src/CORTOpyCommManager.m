@@ -69,6 +69,7 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.charStartBlenderServerCallerPath (1,:) string        {mustBeA(kwargs.charStartBlenderServerCallerPath , ["string", "char"])} = ""
                 kwargs.charBlenderModelPath             (1,:) string        {mustBeA(kwargs.charBlenderModelPath , ["string", "char"])} = ""
                 kwargs.charCORTOpyInterfacePath         (1,:) string        {mustBeA(kwargs.charCORTOpyInterfacePath , ["string", "char"])} = ""
+                kwargs.objCameraIntrisincs              (1,1) {mustBeA(kwargs.objCameraIntrisincs, ["CCameraIntrinstics", "cameraIntrinsics"])} = CCameraIntrinsics()
             end
 
             bIsValidServerAutoManegementConfig = false;
@@ -758,7 +759,7 @@ classdef CORTOpyCommManager < CommManager
 
             if bIsImageRGB
                 % Call external function
-                dImg = unpackImageFromCORTO2_(dImgBuffer, bApplyBayerFilter);
+                dImg = unpackImageFromCORTO_(dImgBuffer, bApplyBayerFilter);
             else
                 % TODO (PC) You will need to modiy the input to the class/function
                 error('Not implemented yet. Requires size of camera to be known!')
@@ -779,26 +780,6 @@ classdef CORTOpyCommManager < CommManager
 
     methods (Access = protected)
         % Internal implementations
-        function self = parseYamlConfig_(self, charConfigYamlFilename)
-
-            % Check if file exists
-            assert(exist(charConfigYamlFilename, 'file'), "Yaml configuration file specified as input not found.")
-
-            % Check if it has file extension, else add
-            [~, ~, charExt] = fileparts(charConfigYamlFilename);
-
-            if strcmpi(charExt, "")
-                charConfigYamlFilename = strcat(charConfigYamlFilename, ".yaml");
-            end
-            
-            % Store path to yaml file
-            self.charConfigYamlFilename = charConfigYamlFilename;
-
-            % Load file using yaml community library
-            self.strConfigFromYaml = yaml.loadFile(charConfigYamlFilename);
-
-        end
-
         function dImgRGB = unpackImageFromCORTO_impl(self, dImgBuffer, bApplyBayerFilter)
             arguments
                 self                (1,1)
