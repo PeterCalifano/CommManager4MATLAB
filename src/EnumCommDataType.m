@@ -5,6 +5,7 @@ classdef EnumCommDataType
         UINT8
         UINT16
         UINT32
+        UNSET
     end
 end
 
