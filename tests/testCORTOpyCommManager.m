@@ -41,7 +41,7 @@ charServerAddress = 'localhost';
 ui32ServerPort = [30001, 51000]; % [TCP, UDP]
 ui32TargetPort = 51001; % UDP recv
 dCommTimeout = 30;
-i32RecvTCPsize = 4 * 2048 * 1536 * 64/8; % Number of bytes to read: 4*64*NumOfpixels
+i64RecvTCPsize = int64(4 * 2048 * 1536 * 64/8); % Number of bytes to read: 4*64*NumOfpixels
 
 return
 
@@ -136,7 +136,7 @@ objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dC
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
-    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i32RecvTCPsize);
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i64RecvTCPsize);
 
 % Compose scene data stuct 
 dSceneDataVector = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
@@ -162,14 +162,13 @@ objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dC
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
-    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i32RecvTCPsize);
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i64RecvTCPsize);
 
 
 % Assign data
 % Nav frame is CAMERA frame
 % Convert Blender quaternions to DCM for testing
 dSunVector_NavFrame             = dSunPos;
-dSunAttDCM_NavframeFromTF       = quat2dcm(dSunQuat); 
 dCameraOrigin_NavFrame          = dSCPos;
 dCameraAttDCM_NavframeFromTF    = quat2dcm(dSCquat);
 dBodiesOrigin_NavFrame          = dBody1Pos;
@@ -177,7 +176,6 @@ dBodiesAttDCM_NavFrameFromTF    = quat2dcm(dBody1Quat);
 
 % Test renderImage method
 dImg = objCortopyCommManager.renderImage(dSunVector_NavFrame, ...
-                                        dSunAttDCM_NavframeFromTF, ...
                                         dCameraOrigin_NavFrame', ...
                                         dCameraAttDCM_NavframeFromTF, ...
                                         dBodiesOrigin_NavFrame', ...
@@ -192,36 +190,66 @@ pause(1);
 
 % Delete instance and terminate server
 delete(objCortopyCommManager)
+return
 
 %% CORTOpyCommManager_renderImageSequence
 
 % TODO: load setup for SLAM simulations
+addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
+run('loadSimulationSetup');
 
-
-% Overwrite model definition
-charBlenderModelPath
+% Overwrite model definition if needed
+charBlenderModelPath     = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
+charCORTOpyInterfacePath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py";
 
 % Instance definition with automatic management of server
 objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
-    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
-    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i32RecvTCPsize);
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, ...
+    "objCameraIntrisincs", objCamera);
 
 
-% Assign data
+% Define scene 
+ui32NumOfImgs = length(strScenConfig.dTimestamps)
+
 % Nav frame is TARGET BODY frame
 % Convert Blender quaternions to DCM for testing
-dSunVector_Buffer_NavFrame             = dSunPositions_TB;
-dSunAttDCM_Buffer_NavframeFromTF       = quat2dcm(dSunQuat); 
-dCameraOrigin_Buffer_NavFrame          = dSCPos;
-dCameraAttDCM_Buffer_NavframeFromTF    = quat2dcm(dSCquat);
-dBodiesOrigin_Buffer_NavFrame          = dBody1Pos;
-dBodiesAttDCM_Buffer_NavFrameFromTF    = quat2dcm(dBody1Quat);
+dSunVector_Buffer_NavFrame             = zeros(3, ui32NumOfImgs);
+dSunAttDCM_Buffer_NavframeFromTF       = zeros(3,3, ui32NumOfImgs);
+dCameraOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
+dCameraAttDCM_Buffer_NavframeFromTF    = zeros(3, 3, ui32NumOfImgs);
+dBodiesOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
+dBodiesAttDCM_Buffer_NavFrameFromTF    = zeros(3, 3, ui32NumOfImgs);
+
+
+% Construct scene buffers
+for ui32TimestampID = 1:length(strScenConfig.dTimestamps)
+
+
+    % Nav frame is TARGET BODY frame
+    dSunPositions_TB = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
+    % dSunDirGT_TB = dSunDirGT_TB./norm(dSunDirGT_TB);
+
+    dSunVector_Buffer_NavFrame(:, ui32TimestampID)               = dSunPositions_TB;
+    % dSunAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)      = quat2dcm(dSunQuat);
+
+    dCameraOrigin_Buffer_NavFrame(:, ui32TimestampID)            = strReferenceData.dxSCref_IN(1:3, ui32TimestampID);
+    dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)   = transpose(strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID));
+    
+    % dBodiesOrigin_Buffer_NavFrame(:, ui32TimestampID)            = zeros(3,1);
+    dBodiesAttDCM_Buffer_NavFrameFromTF(:, :, ui32TimestampID)   = transpose(strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID));
+
+end
+
+ [dSunAttQuat_Buffer_NavframeFromTF, dSunAttDCM_Buffer_NavframeFromTF] = CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
+
+ 
+% TODO: remove input DCM from Sun and convert position to quaternion internally!
 
 % Test renderImage method
 dImg = objCortopyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
-                                                 dSunAttDCM_Buffer_NavframeFromTF, ...
                                                  dCameraOrigin_Buffer_NavFrame', ...
                                                  dCameraAttDCM_Buffer_NavframeFromTF, ...
                                                  dBodiesOrigin_Buffer_NavFrame', ...
