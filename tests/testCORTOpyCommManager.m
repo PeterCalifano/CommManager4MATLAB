@@ -180,9 +180,7 @@ dImg = objCortopyCommManager.renderImage(dSunVector_NavFrame, ...
                                         dCameraAttDCM_NavframeFromTF, ...
                                         dBodiesOrigin_NavFrame', ...
                                         dBodiesAttDCM_NavFrameFromTF, ...
-                                        "enumRenderingFrame", EnumRenderingFrame.CAMERA, ...
-                                        "bApplyBayerFilter", true, ...
-                                        "bIsImageRGB", true);
+                                        "enumRenderingFrame", EnumRenderingFrame.CAMERA);
 
 imshow(dImg);
 pause(1);
@@ -212,22 +210,22 @@ objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dC
 
 
 % Define scene 
-ui32NumOfImgs = length(strScenConfig.dTimestamps)
+ui32NumOfImgs = 2;% length(strScenConfig.dTimestamps)
 
 % Nav frame is TARGET BODY frame
 % Convert Blender quaternions to DCM for testing
 dSunVector_Buffer_NavFrame             = zeros(3, ui32NumOfImgs);
 dSunAttDCM_Buffer_NavframeFromTF       = zeros(3,3, ui32NumOfImgs);
 dCameraOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
-dCameraAttDCM_Buffer_NavframeFromTF    = zeros(3, 3, ui32NumOfImgs);
+dCameraAttDCM_Buffer_NavframeFromTF6    = zeros(3, 3, ui32NumOfImgs);
 dBodiesOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
 dBodiesAttDCM_Buffer_NavFrameFromTF    = zeros(3, 3, ui32NumOfImgs);
 
 
 % Construct scene buffers
-for ui32TimestampID = 1:length(strScenConfig.dTimestamps)
+for ui32TimestampID = 1:ui32NumOfImgs
 
-
+    error('Inputs do not match. Either all in TB or all in IN ;)')
     % Nav frame is TARGET BODY frame
     dSunPositions_TB = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
     % dSunDirGT_TB = dSunDirGT_TB./norm(dSunDirGT_TB);
@@ -249,16 +247,18 @@ end
 % TODO: remove input DCM from Sun and convert position to quaternion internally!
 
 % Test renderImage method
-dImg = objCortopyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
-                                                 dCameraOrigin_Buffer_NavFrame', ...
+ui8OutImgArrays = objCortopyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
+                                                 dCameraOrigin_Buffer_NavFrame, ...
                                                  dCameraAttDCM_Buffer_NavframeFromTF, ...
-                                                 dBodiesOrigin_Buffer_NavFrame', ...
+                                                 dBodiesOrigin_Buffer_NavFrame, ...
                                                  dBodiesAttDCM_Buffer_NavFrameFromTF, ...
-                                                 "enumRenderingFrame", EnumRenderingFrame.TARGET_BODY, ...
-                                                 "bApplyBayerFilter", true, ...
-                                                 "bIsImageRGB", true);
+                                                 "charOutputDatatype", "uint8");
 
+figure;
+imshow(ui8OutImgArrays(:,:,1))
 
+figure;
+imshow(ui8OutImgArrays(:,:,2))
 
 
 
