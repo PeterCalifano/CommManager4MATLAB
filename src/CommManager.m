@@ -307,6 +307,8 @@ classdef CommManager < handle
                         % TODO (PC) not easy at it may seem: read is blocking, but if there exists latency
                         % between when this client reaches it and the time the server writes something to
                         % buffer, this mode would break apart entirely. 
+                    elseif self.i64RecvTCPsize == -10 % AUTOCOMPUTE mode
+                        error('The size of TCP recv is assumed to be assigned by CommManager subclass in this mode. However no assigment was performed!');
                     else
                         recvBytes = self.i64RecvTCPsize; % Use specified size to receive
                     end
@@ -420,7 +422,9 @@ classdef CommManager < handle
         function self = parseYamlConfig_(self, charConfigYamlFilename)
 
             % Check if file exists
+            fprintf("\n\tAttempt to parse configuration file %s... ", charConfigYamlFilename);
             assert(exist(charConfigYamlFilename, 'file'), "Yaml configuration file specified as input not found.")
+            fprintf("DONE.\n");
 
             % Check if it has file extension, else add
             [~, ~, charExt] = fileparts(charConfigYamlFilename);
