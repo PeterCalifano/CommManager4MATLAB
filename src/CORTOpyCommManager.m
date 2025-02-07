@@ -37,9 +37,9 @@ classdef CORTOpyCommManager < CommManager
         charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
         
         % Bytes to image conversion params
-        objCameraIntrinsics 
-        bApplyBayerFilter (1,1) logical {islogical, isscalar} = false;
-        bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
+        objCameraIntrinsics = CCameraIntrinsics()
+        % bApplyBayerFilter (1,1) logical {islogical, isscalar} = false;
+        % bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
 
         enumCommDataType (1,1) {mustBeA(enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.DOUBLE
 
@@ -66,13 +66,13 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.dOutputDatagramSize              (1,1) double        {isscalar, isnumeric} = 512
                 kwargs.ui32TargetPort                   (1,1) uint32        {isscalar, isnumeric} = 0
                 kwargs.charTargetAddress                (1,:) string        {mustBeA(kwargs.charTargetAddress , ["string", "char"])} = "127.0.0.1"
-                kwargs.i64RecvTCPsize                   (1,1) int64         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5
+                kwargs.i64RecvTCPsize                   (1,1) int64         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5, -10 (auto compute)
                 kwargs.charConfigYamlFilename           (1,:) string        {mustBeA(kwargs.charConfigYamlFilename , ["string", "char"])}  = ""
                 kwargs.bAutoManageBlenderServer         (1,1) logical       {isscalar, islogical} = false
                 kwargs.charStartBlenderServerCallerPath (1,:) string        {mustBeA(kwargs.charStartBlenderServerCallerPath , ["string", "char"])} = ""
                 kwargs.charBlenderModelPath             (1,:) string        {mustBeA(kwargs.charBlenderModelPath , ["string", "char"])} = ""
                 kwargs.charCORTOpyInterfacePath         (1,:) string        {mustBeA(kwargs.charCORTOpyInterfacePath , ["string", "char"])} = ""
-                kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinstics")} = CCameraIntrinsics()
+                kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
             end
 
@@ -143,8 +143,46 @@ classdef CORTOpyCommManager < CommManager
                 self.parseYamlConfig_(kwargs.charConfigYamlFilename);
             end
 
+            % Determine transmission dtype
+            % Input kwargs overrides all
+            if not(kwargs.enumCommDataType == EnumCommDataType.UNSET)
+                self.enumCommDataType  = kwargs.enumCommDataType;
+
+                if not(strcmpi(kwargs.charConfigYamlFilename, ""))
+                    warning('Both datatype option and yaml configuration file specified. Input datatype overrides specification. Please remove it if this is unintended.')
+                end
+
+            elseif not(strcmpi(kwargs.charConfigYamlFilename, ""))
+                self.enumCommDataType = upper(self.strConfigYamlFilename.image_dtype);
+            end
+
+            if self.i64RecvTCPsize == -10
+                switch self.enumCommDataType
+
+                    case "DOUBLE"
+                        dMSG_ENTRY_BYTES_SIZE = 8; % TODO: generalize for different dtype
+
+                    case "SINGLE"
+                        dMSG_ENTRY_BYTES_SIZE = 4; % TODO: generalize for different dtype
+
+                    case "UINT8"
+                        dMSG_ENTRY_BYTES_SIZE = 1; % TODO: generalize for different dtype
+
+                    case "UINT16"
+                        dMSG_ENTRY_BYTES_SIZE = 2; % TODO: generalize for different dtype
+
+                    case "UINT32"
+                        dMSG_ENTRY_BYTES_SIZE = 4; % TODO: generalize for different dtype
+
+                    case "UNSET"
+                        warning('Unset message entry datatype: assuming double by default (8 bytes per entry).')
+                        self.enumCommDataType = "DOUBLE";
+                end
+            end
+
             % Load camera data from object, yaml config or default data (Milani NavCam)
             % Input object overrides all
+
             if not(kwargs.objCameraIntrisincs.bDefaultConstructed)
                 fprintf('\nCamera parameters initialized from input object.\n')
                 self.objCameraIntrinsics = kwargs.objCameraIntrisincs;
@@ -158,47 +196,55 @@ classdef CORTOpyCommManager < CommManager
                 % Get params from file
 
                 % Construct camera intrinsics object and assign
-                % TODO --> need to add constructor from fov TBD
-
-                % self.strConfigFromYaml.Camera_Params.FOV_x;
-                % self.strConfigFromYaml.Camera_Params.FOV_Y;
-                % self.strConfigFromYaml.Camera_Params.sensor_size_x
-                % self.strConfigFromYaml.Camera_Params.sensor_size_y
+                dFOV_x          = self.strConfigFromYaml.Camera_Params.FOV_x; % [deg] Horizontal Field of View
+                dFOV_y          = self.strConfigFromYaml.Camera_Params.FOV_Y; % [deg] Vertical Field of View
+                dSensor_size_x  = self.strConfigFromYaml.Camera_Params.sensor_size_x; % [px] Horizontal resolution
+                dSensor_size_y  = self.strConfigFromYaml.Camera_Params.sensor_size_y; % [px] Vertical resolution
+            
+                dPrincipalPoint_uv = [dSensor_size_x, dSensor_size_y]./2;
+            
+                % TODO: add assert on rounding! Must be integer
 
                 % self.ui32NumOfChannels = self.strConfigFromYaml.Camera_Params.n_channels;
+                dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
 
-                % self.objCameraIntrinsics = CCameraIntrinsics();
-                error('Not yet implemented >.<')
+                % Construct camera intrinsics object
+                self.objCameraIntrinsics = CCameraIntrinsics( dFocalLength_uv, dPrincipalPoint_uv, [dSensor_size_x, dSensor_size_y] );
 
             else
-                % Assume Milani NavCam parameters
+                % Assume Milani/RCS-1 NavCam parameters
                 warning('No camera object nor yaml configuration file specified. Assuming Milani NavCam parameters.')
-                error('Not yet implemented >.<')
 
-                dFocalLength
-                ui32ImageSize = [2048, 1536];
+                dFOV_x = 21; % [deg]
+                dFOV_y = 16;
+                dSensor_size_x = 2048; % [px]
+                dSensor_size_y = 1536; 
+
+                dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
+                
+                ui32ImageSize = [dSensor_size_x, dSensor_size_y];
                 dPrincipalPoint = double(ui32ImageSize)/2;
 
-                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength, dPrincipalPoint, ui32ImageSize);
+                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv, dPrincipalPoint, ui32ImageSize);
+                self.objCameraIntrinsics.ui32NumOfChannels = uint32(3);
+                dMSG_ENTRY_BYTES_SIZE = 8;
+                self.enumCommDataType = "DOUBLE";
+
+                % Assign TCP recv size (fixed in Milani/RCS-1 case
+                % self.i64RecvTCPsize = int64(4 * 2048 * 1536 * dBYTES_IN_DOUBLE);
             end
 
-            % Determine transmission dtype
-            % Input kwargs overrides all
-            if not(kwargs.enumCommDataType == EnumCommDataType.UNSET)
-                self.enumCommDataType  = kwargs.enumCommDataType;
+            % Auto compute TCP message recv size from camera data if available
+            if self.i64RecvTCPsize == -10
 
-                if not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                    warning('Both datatype option and yaml configuration file specified. Input datatype overrides specification. Please remove it if this is unintended.')
-                end
+                % Compute recv TCP buffer size
+                dAutoComputedRecvTCPsize = (self.objCameraIntrinsics.ui32NumOfChannels * ...
+                                            self.objCameraIntrinsics.ImageSize(2) * ...
+                                            self.objCameraIntrinsics.ImageSize(1) * ...
+                                            dMSG_ENTRY_BYTES_SIZE);
 
-            elseif not(strcmpi(kwargs.charConfigYamlFilename, ""))
-            
-
-            end
-
-            % If not specified, determine recv size of image
-            if not(kwargs.i64RecvTCPsize ~= -1) 
-                % TODO: how to distinguish case actual -1 case from "autocompute" case?
+                % Set buffer size
+                self.i64RecvTCPsize = int64(dAutoComputedRecvTCPsize);
 
             end
 
@@ -237,26 +283,41 @@ classdef CORTOpyCommManager < CommManager
         end
 
         % GETTERS
-        function printCameraParams(self)
+        function printCameraParams(self, objCameraIntrinsics)
+            arguments
+                self
+                objCameraIntrinsics (1,1) {mustBeA(objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
+            end
+
+
+            if objCameraIntrinsics.bDefaultConstructed
+                % Use camera object in self
+                objCameraIntrinsics = self.objCameraIntrinsics;
+            end
+
+
             fprintf("\nCORTOpyCommManager will use the following camera parameters:\n");
 
             % Focal Length
-            fprintf(" - Focal length: [%.2f, %.2f] [mm or px] (X, Y)\n", self.objCameraIntrinsics.FocalLength(1), self.objCameraIntrinsics.FocalLength(2));
+            fprintf(" - Focal length: [%.2f, %.2f] [mm or px] (X, Y)\n", objCameraIntrinsics.FocalLength(1), objCameraIntrinsics.FocalLength(2));
 
             % Field of View (FoV)
-            fprintf(" - Field of View (FoV): [%.2f, %.2f] degrees (X, Y)\n", rad2deg(self.objCameraIntrinsics.dFovHW(1)), rad2deg(self.objCameraIntrinsics.dFovHW(2)));
+            fprintf(" - Field of View (FoV): [%.2f, %.2f] degrees (X, Y)\n", rad2deg(objCameraIntrinsics.dFovHW(1)), rad2deg(objCameraIntrinsics.dFovHW(2)));
 
             % Image Size
-            fprintf(" - Image size: [%d, %d] pixels (Width X, Height Y)\n", self.objCameraIntrinsics.ImageSize(1), self.objCameraIntrinsics.ImageSize(2));
+            fprintf(" - Image size: [%d, %d] pixels (Width X, Height Y)\n", objCameraIntrinsics.ImageSize(1), objCameraIntrinsics.ImageSize(2));
 
             % Image Type
-            if self.bIsImageRGB
+            if objCameraIntrinsics.ui32NumOfChannels == 3 || objCameraIntrinsics.ui32NumOfChannels == 4
                 fprintf(" - Image type: RGB (3-4 channels). Blender will send 4 channels (with Alpha)\n");
-            else
+            elseif objCameraIntrinsics.ui32NumOfChannels == 1
                 fprintf(" - Image type: Grayscale (1 channel)\n");
+            else
+                error('Invalid number of channels. Expected 1 (Grayscale) or 3/4 (RGB/RGBA) but found %d', objCameraIntrinsics.ui32NumOfChannels)
             end
 
             % Image Data Type
+            fprintf("\n Communication buffer details:\n")
             fprintf(" - Image data type for transmission: %s\n", self.enumCommDataType);
 
             % Assumed Buffer Size for TCP Transmission
@@ -266,7 +327,6 @@ classdef CORTOpyCommManager < CommManager
         % METHODS
 
         function [outImgArrays, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
-                                                         dSunAttDCM_Buffer_NavframeFromTF, ...
                                                          dCameraOrigin_Buffer_NavFrame, ...
                                                          dCameraAttDCM_Buffer_NavframeFromTF, ...
                                                          dBodiesOrigin_Buffer_NavFrame, ...
@@ -275,53 +335,53 @@ classdef CORTOpyCommManager < CommManager
             arguments (Input)
                 self
                 dSunVector_Buffer_NavFrame              (3,:)   double {isvector, isnumeric}
-                dSunAttDCM_Buffer_NavframeFromTF        (3,3,:) double {ismatrix, isnumeric}
                 dCameraOrigin_Buffer_NavFrame           (3,:)   double {isvector, isnumeric}
-                dCameraAttDCM_Buffer_NavframeFromTF     (3,3,:)   double {ismatrix, isnumeric}
+                dCameraAttDCM_Buffer_NavframeFromTF     (3,3,:,:) double {ismatrix, isnumeric}
                 dBodiesOrigin_Buffer_NavFrame           (3,:,:)   double {ismatrix, isnumeric} = zeroes(3,1)
                 dBodiesAttDCM_Buffer_NavFrameFromTF     (3,3,:,:) double {ismatrix, isnumeric} = eye(3)
             end
             arguments (Input)
-                kwargs.charConfigYamlFilename           (1,:)   string = ""
-                kwargs.ui32TargetPort                   (1,1) uint32 {isscalar, isnumeric} = 0
-                kwargs.charOutputDatatype               (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "double"
-                kwargs.ui32HorizontalSize               (1,1) uint32 {isnumeric, isscalar} = -1
-                kwargs.ui32VerticalSize                 (1,1) uint32 {isnumeric, isscalar} = -1
-                kwargs.ui32NumOfBodies                  (1,1) uint32 {isnumeric, isscalar} = 1
-                kwargs.ui32NumOfImgChannels             (1,1) uint32 {isnumeric, isscalar} = -1
-            end
-
-            % Parse configuration file if not already initialized or override
-            if not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                self.parseYamlConfig_(kwargs.charConfigYamlFilename);
+                kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
+                kwargs.charOutputDatatype              (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "double"
+                kwargs.ui32NumOfBodies                 (1,1) uint32 {isnumeric, isscalar} = 1
+                kwargs.objCameraIntrisincs             (1,1) {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
+                kwargs.bApplyBayerFilter               (1,1) logical {islogical, isscalar} = false;
+                kwargs.bIsImageRGB                     (1,1) logical {islogical, isscalar} = false;
             end
                 
             % Optionally the user may instantiate the class or set the data for rendering sequence before calling this method. Default args uses class attributes.
             % TODO (PC) complete configuration setup for method. Need to add indexing of input yaml config
-            if any([kwargs.ui32HorizontalSize, ...
-                    kwargs.ui32VerticalSize, ...
-                    kwargs.ui32NumOfBodies, ...
-                    kwargs.ui32NumOfImgChannels] == -1)
+            if kwargs.objCameraIntrisincs.bDefaultConstructed && self.objCameraIntrisincs.bDefaultConstructed
+                error('No camera parameters specified at instantiation or as input to this method. Please retry providing a valid CCameraIntrinsics object.')
+            
+            elseif not(kwargs.objCameraIntrisincs.bDefaultConstructed) && not(self.objCameraIntrisincs.bDefaultConstructed)
+                warning('A valid CCameraIntrinsics is available from class instantiation but is overridden by input objCameraIntrisincs object.')
+                fprintf('\nUsing camera parameters from input object\n')
+                
+                objCameraIntrisincs = kwargs.objCameraIntrisincs;
 
-                % Load configuration parameters from strConfigFromYaml
-                assert(not(strcmpi(self.strConfigFromYaml, "")), "Class instance configuration not loaded from Yaml. " + ...
-                    "Please provide configuration yaml as used by CORTO_interface UDP-TCP script at instantiation or as input to this method." + ...
-                    "Alternatively, provide all data as input kwargs parameters.")
+            elseif not(self.objCameraIntrisincs.bDefaultConstructed) && kwargs.objCameraIntrisincs.bDefaultConstructed
+                % Get camera parameters from
+                objCameraIntrisincs = self.objCameraIntrisincs;
+
+            else
+                error('Invalid class configuration: error in retrieving camera parameters from instance or input!');
+            end
+
+
 
                 ui32HorizontalSize      = self.strConfigFromYaml;
                 ui32VerticalSize        = self.strConfigFromYaml;
                 ui32NumOfBodies         = self.strConfigFromYaml;
                 ui32NumOfImgChannels    = self.strConfigFromYaml;
 
-            else
 
                 % Use input parameters (must all be specified)
-                ui32HorizontalSize      = kwargs.ui32HorizontalSize  ;
+                ui32HorizontalSize      = kwargs.objCameraIntrisincs.ImageSize();
                 ui32VerticalSize        = kwargs.ui32VerticalSize    ;
                 ui32NumOfBodies         = kwargs.ui32NumOfBodies     ;
                 ui32NumOfImgChannels    = kwargs.ui32NumOfImgChannels;
 
-            end
 
             if kwargs.ui32TargetPort > 0
                 % Temporarily override set target port
@@ -330,7 +390,7 @@ classdef CORTOpyCommManager < CommManager
             end
 
             % Input and validation checks 
-            ui32NumOfImages = uint32();
+            % ui32NumOfImages = uint32();
         
             if ui32NumOfBodies == 1
                 assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 3);
@@ -343,14 +403,17 @@ classdef CORTOpyCommManager < CommManager
             % Rendering loop
             outImgArrays = zeros(ui32HorizontalSize, ui32VerticalSize, ui32NumOfImgChannels, ui32NumOfImages, char(charOutputDatatype) );
 
+                            % CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
+
+
             for idImg = 1:ui32NumOfImages
                 
                 % Get data from buffers
                 dSunVector_NavFrame             = dSunVector_Buffer_NavFrame         (:, idImg);
-                dSunAttDCM_NavframeFromTF       = dSunAttDCM_Buffer_NavframeFromTF   (:,:, idImg);
                 dCameraOrigin_NavFrame          = dCameraOrigin_Buffer_NavFrame      (:, idImg);
                 dCameraAttDCM_NavframeFromTF    = dCameraAttDCM_Buffer_NavframeFromTF(:,:, idImg);
 
+                
                 if ui32NumOfBodies == 1
                     % Handle single body assuming 2D and 3D arrays as inputs
                     dBodiesOrigin_NavFrame          = dBodiesOrigin_Buffer_NavFrame      (:, idImg);
@@ -392,7 +455,6 @@ classdef CORTOpyCommManager < CommManager
 
         % Single image rendering from disaggregated scene data
         function [dImg, self] = renderImage(self, dSunVector_NavFrame, ...
-                                            dSunAttDCM_NavframeFromTF, ...
                                             dCameraOrigin_NavFrame, ...
                                             dCameraAttDCM_NavframeFromTF, ...
                                             dBodiesOrigin_NavFrame, ...
@@ -401,7 +463,6 @@ classdef CORTOpyCommManager < CommManager
             arguments
                 self
                 dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
-                dSunAttDCM_NavframeFromTF       (3,3)   double {ismatrix, isnumeric}
                 dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
                 dCameraAttDCM_NavframeFromTF    (3,3)   double {ismatrix, isnumeric}
                 dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeros(3,1)
@@ -429,9 +490,11 @@ classdef CORTOpyCommManager < CommManager
             dSceneDataVector = zeros(1, 7 * (2 + size(dBodiesOrigin_NavFrame, 2))); % [PQ_i] representation [SunPQ, CameraPQ, Body1PQ, ... BodyNPQ]
 
             % Convert disaggregated scene data to dSceneData vector representation
-            dSceneDataVector(:) = self.composeSceneDataVector(dSunVector_NavFrame, dSunAttDCM_NavframeFromTF, ...
-                dCameraOrigin_NavFrame, dCameraAttDCM_NavframeFromTF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromTF, ...
-                'enumRenderingFrame', kwargs.enumRenderingFrame, 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, 'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
+            dSceneDataVector(:) = self.composeSceneDataVector(dSunVector_NavFrame, dCameraOrigin_NavFrame, ...
+                dCameraAttDCM_NavframeFromTF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromTF, ...
+                'enumRenderingFrame', kwargs.enumRenderingFrame, ...
+                'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, ...
+                'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
 
             % Call renderImageFromPQ_ implementation
             [dImg, self] = self.renderImageFromPQ_(dSceneDataVector, ...
@@ -687,14 +750,17 @@ classdef CORTOpyCommManager < CommManager
                     [bIsServerRunning] = CORTOpyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
 
                     if not(bIsServerRunning)
-                        error("Command executed: %s.\nHowever, the server did not started correctly. Check log if available.", charStartBlenderCommand)
+                        error("\nAttempt to start server using command: \t\n%s.\nHowever, the server did not started correctly. Check log if available.", charStartBlenderCommand)
                     end
 
                     fprintf(sprintf("DONE. %s \n", charLogPipePath));
 
                 catch ME
                     if bIsValidServerAutoManegementConfig
-                        fprintf("\nAuto managed Blender server startup failed due to error: %s. \nExecution paused. Please start server manually before continuing.\n", ME.message)
+                        disp('')
+                        warning("Auto managed Blender server startup failed due to the error below.")
+                        fprintf("\nError message: %s", string(ME.message));
+                        fprintf("\nExecution PAUSED. Please start server manually before continuing.\n"); 
                         pause();
                     else
                         error("\nStartup of Blender server failed in manual mode due to: %s", string(ME.message) );
@@ -754,7 +820,6 @@ classdef CORTOpyCommManager < CommManager
 
         % Method to compose scene data vector (PQ data)
         function [dSceneDataVector] = composeSceneDataVector(dSunVector_NavFrame, ...
-                dSunAttDCM_NavframeFromTF, ...
                 dCameraOrigin_NavFrame, ...
                 dCameraAttDCM_NavframeFromTF, ...
                 dBodiesOrigin_NavFrame, ...
@@ -762,7 +827,6 @@ classdef CORTOpyCommManager < CommManager
                 kwargs)
             arguments
                 dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
-                dSunAttDCM_NavframeFromTF       (3,3)   double {ismatrix, isnumeric}
                 dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
                 dCameraAttDCM_NavframeFromTF    (3,3)   double {ismatrix, isnumeric}
                 dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeroes(3,1)
@@ -794,7 +858,7 @@ classdef CORTOpyCommManager < CommManager
             end
 
             % Convert all attitude matrices to quaternions used by Blender
-            dSunQuaternion_ToNavFrame    = DCM2quat(dSunAttDCM_NavframeFromTF, false);
+            dSunQuaternion_ToNavFrame    = CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
             dCameraQuaternion_ToNavFrame = DCM2quat(dCameraAttDCM_NavframeFromTF, false);
                 
             dBodiesQuaternion_ToNavFrame = zeros(4, ui32NumOfBodies);
@@ -940,6 +1004,40 @@ classdef CORTOpyCommManager < CommManager
     
 
     methods (Static, Access = public)
+
+        function [dSunBlenderQuatArray, dSunDCMarray] = computeSunBlenderQuatFromPosition(dSunPositionArray_NavFrame)
+            arguments
+                dSunPositionArray_NavFrame (3,:) double {isvector, isnumeric}
+            end
+            % Function to construct quaternion determining Sun direction as required by Blender, from position
+            
+            ui32NumOfQuats = size(dSunPositionArray_NavFrame, 2);
+            dSunBlenderQuatArray = zeros(4, ui32NumOfQuats);
+            dSunDCMarray = zeros(3, 3, ui32NumOfQuats);
+
+            % Compute unit direction
+            dUnitVectorToSunArray = dSunPositionArray_NavFrame./vecnorm(dSunPositionArray_NavFrame, 2, 1);
+        
+            % Compute Z axis
+            dZaxisArray = dUnitVectorToSunArray;
+            dAuxVectorArray =  repmat([1; 0; 0], 1, ui32NumOfQuats);
+            
+            % Compute X axis
+            dXaxisArray = cross(dAuxVectorArray, dZaxisArray) ./ vecnorm(cross(dAuxVectorArray, dZaxisArray), 2, 1);
+            
+            % Compute Y axis
+            dYaxisArray = cross(dZaxisArray, dXaxisArray);
+
+            for idR = 1:ui32NumOfQuats
+                % DEVNOTE: taken from Milani/RCS1 NavCam
+                dSunDCMarray(:,:, idR) = transpose([dXaxisArray(:,idR)'; dYaxisArray(:,idR)'; dZaxisArray(:,idR)']); 
+                dSunBlenderQuatArray(1:4, idR) = rotm2quat(dSunDCMarray(:,:, idR));
+            end
+
+
+        end
+
+
 
         function [img_bayer] = applyBayer_to_RGB_(RGB, BayerFilter)
             % TODO (PC): rework legacy function
