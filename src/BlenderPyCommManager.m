@@ -1,4 +1,4 @@
-classdef CORTOpyCommManager < CommManager
+classdef BlenderPyCommManager < CommManager
     %% CONSTRUCTOR
     %
     % -------------------------------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ classdef CORTOpyCommManager < CommManager
         bSendLogToShellPipe                     (1,1) logical {islogical, isscalar} = false % FIXME, not working is true due to system call failure
 
         charBlenderModelPath                (1,1) string {mustBeA(charBlenderModelPath, ["string", "char"])}
-        charCORTOpyInterfacePath            (1,1) string {mustBeA(charCORTOpyInterfacePath, ["string", "char"])}  
+        charBlenderPyInterfacePath            (1,1) string {mustBeA(charBlenderPyInterfacePath, ["string", "char"])}  
         charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
         
         % Bytes to image conversion params
@@ -52,13 +52,13 @@ classdef CORTOpyCommManager < CommManager
     %% PUBLIC methods
     methods (Access = public)
         % CONSTRUCTOR
-        function self = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
+        function self = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
                 charServerAddress (1,:) {ischar, isstring}              = "127.0.0.1" % Assumes localhost
-                ui32ServerPort    (1,2) uint32  {isvector, isnumeric}   = [30001, 51000]; % [TCP, UDP] Assumes ports used by CORTOpy interface
+                ui32ServerPort    (1,2) uint32  {isvector, isnumeric}   = [30001, 51000]; % [TCP, UDP] Assumes ports used by BlenderPy interface
                 dCommTimeout      (1,1) double  {isscalar, isnumeric}   = 45
             end
-            % TODO: adjust kwargs required for CORTOpy
+            % TODO: adjust kwargs required for BlenderPy
             arguments
                 kwargs.bInitInPlace                     (1,1) logical       {islogical, isscalar} = false
                 kwargs.enumCommMode                     (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.UDP_TCP
@@ -71,7 +71,7 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.bAutoManageBlenderServer         (1,1) logical       {isscalar, islogical} = false
                 kwargs.charStartBlenderServerCallerPath (1,:) string        {mustBeA(kwargs.charStartBlenderServerCallerPath , ["string", "char"])} = ""
                 kwargs.charBlenderModelPath             (1,:) string        {mustBeA(kwargs.charBlenderModelPath , ["string", "char"])} = ""
-                kwargs.charCORTOpyInterfacePath         (1,:) string        {mustBeA(kwargs.charCORTOpyInterfacePath , ["string", "char"])} = ""
+                kwargs.charBlenderPyInterfacePath         (1,:) string        {mustBeA(kwargs.charBlenderPyInterfacePath , ["string", "char"])} = ""
                 kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
             end
@@ -87,8 +87,8 @@ classdef CORTOpyCommManager < CommManager
                         'Mode cannot be enabled: please manage server manually.'])
                     bIsValidServerAutoManegementConfig = false;
 
-                    if any([strcmpi(kwargs.charBlenderModelPath , ""), strcmpi(kwargs.charCORTOpyInterfacePath, "")])
-                        error("Auto management requested, but either charCORTOpyInterfacePath or charBlenderModelPath paths are undefined.")
+                    if any([strcmpi(kwargs.charBlenderModelPath , ""), strcmpi(kwargs.charBlenderPyInterfacePath, "")])
+                        error("Auto management requested, but either charBlenderPyInterfacePath or charBlenderModelPath paths are undefined.")
                     end
 
                     if kwargs.bInitInPlace
@@ -129,7 +129,7 @@ classdef CORTOpyCommManager < CommManager
             % Store paths
             self.charStartBlenderServerCallerPath = kwargs.charStartBlenderServerCallerPath;
             self.charBlenderModelPath = kwargs.charBlenderModelPath;
-            self.charCORTOpyInterfacePath = kwargs.charCORTOpyInterfacePath;
+            self.charBlenderPyInterfacePath = kwargs.charBlenderPyInterfacePath;
             self.bIsValidServerAutoManegementConfig = bIsValidServerAutoManegementConfig;
             self.ui32ServerPort = ui32ServerPort;
             
@@ -298,7 +298,7 @@ classdef CORTOpyCommManager < CommManager
             end
 
 
-            fprintf("\nCORTOpyCommManager will use the following camera parameters:\n");
+            fprintf("\nBlenderPyCommManager will use the following camera parameters:\n");
 
             % Focal Length
             fprintf(" - Focal length: [%.2f, %.2f] [mm or px] (X, Y)\n", objCameraIntrinsics.FocalLength(1), objCameraIntrinsics.FocalLength(2));
@@ -413,7 +413,7 @@ classdef CORTOpyCommManager < CommManager
             % Rendering loop
             outImgArrays = zeros(objCameraIntrinsics_.ImageSize(1), objCameraIntrinsics_.ImageSize(2), ...
                 objCameraIntrinsics_.ui32NumOfChannels, ui32NumOfImages, char( kwargs.charOutputDatatype) );
-            % CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
+            % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
 
             if kwargs.enumRenderingFrame == "CUSTOM_FRAME"
                 fprintf("\nScene data specified with respect to a custom frame. No check or transformation of the inputs is performed at rendering time.\n")
@@ -555,17 +555,17 @@ classdef CORTOpyCommManager < CommManager
             end
 
             % Input check
-            assert( mod(length(dSceneDataVector), 7) == 0, ['Number of doubles to send to CORTOpy must be a multiple of 7 (PQ message). \n' ...
+            assert( mod(length(dSceneDataVector), 7) == 0, ['Number of doubles to send to BlenderPy must be a multiple of 7 (PQ message). \n' ...
                 'Required format: [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat, ... dBodyNPos, dBodyNQuat]']);
             assert( size(dSceneDataVector, 2) - 14 > 0, 'Only Sun and Camera PQ specified in dSceneData message. You should specify at least 1 body.');
 
             % Cast to bytes
             ui8SceneDataBuffer = typecast(dSceneDataVector, 'uint8');
-            % Send to CORTOpy server
+            % Send to BlenderPy server
             writtenBytes = self.WriteBuffer(ui8SceneDataBuffer, false);
             fprintf('\n\tSent %d bytes. Image requested. Waiting for data...\n', writtenBytes)
 
-            % Wait for data reception from CORTOpy
+            % Wait for data reception from BlenderPy
             [~, recvDataBuffer, self] = self.ReadBuffer(); 
             % Cast data to double
             recvDataVector = typecast(recvDataBuffer, 'double');
@@ -584,8 +584,8 @@ classdef CORTOpyCommManager < CommManager
 
         function [bIsServerRunning] = startBlenderServer(self)
             % Call static method to start server
-            [bIsServerRunning] = CORTOpyCommManager.startBlenderServerStatic(self.charBlenderModelPath, ...
-                                                                             self.charCORTOpyInterfacePath, ...
+            [bIsServerRunning] = BlenderPyCommManager.startBlenderServerStatic(self.charBlenderModelPath, ...
+                                                                             self.charBlenderPyInterfacePath, ...
                                                                              self.charStartBlenderServerCallerPath, ...
                                                                              self.bSendLogToShellPipe, ...
                                                                              self.ui32ServerPort(1), ...
@@ -595,7 +595,7 @@ classdef CORTOpyCommManager < CommManager
         end
 
         function [bIsServerRunning] = checkRunningBlenderServer(self)
-            [bIsServerRunning] = CORTOpyCommManager.checkRunningBlenderServerStatic(self.ui32ServerPort(1));
+            [bIsServerRunning] = BlenderPyCommManager.checkRunningBlenderServerStatic(self.ui32ServerPort(1));
             self.bIsServerRunning = bIsServerRunning;
         end
 
@@ -605,7 +605,7 @@ classdef CORTOpyCommManager < CommManager
                 fprintf("\nAuto managed mode is enabled. Attempting to terminate Blender processes automatically... \n")
             end
             % Call static termination method
-            CORTOpyCommManager.terminateBlenderProcessesStatic()
+            BlenderPyCommManager.terminateBlenderProcessesStatic()
         end
 
 
@@ -695,10 +695,10 @@ classdef CORTOpyCommManager < CommManager
             dImgBayer = zeros(1536, 2048);
 
             % Generate the pattern of the bayer filter
-            dBayerFilter = CORTOpyCommManager.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
+            dBayerFilter = BlenderPyCommManager.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
 
             % Sample the environment RGB image with a bayer filter
-            dImgBayer = CORTOpyCommManager.applyBayer_to_RGB_(ImgRGB,dBayerFilter);
+            dImgBayer = BlenderPyCommManager.applyBayer_to_RGB_(ImgRGB,dBayerFilter);
 
         end
 
@@ -710,14 +710,14 @@ classdef CORTOpyCommManager < CommManager
 
         % Method to start blender server
         function [bIsServerRunning] = startBlenderServerStatic(charBlenderModelPath, ...
-                                                               charCORTOpyInterfacePath, ...
+                                                               charBlenderPyInterfacePath, ...
                                                                charStartBlenderServerCallerPath, ...
                                                                bSendLogToShellPipe, ...
                                                                ui32NetworkPortToCheck, ...
                                                                bIsValidServerAutoManegementConfig)
             arguments
                 charBlenderModelPath                    
-                charCORTOpyInterfacePath            
+                charBlenderPyInterfacePath            
                 charStartBlenderServerCallerPath
                 bSendLogToShellPipe                     
                 ui32NetworkPortToCheck                  (1,1) uint32 {isnumeric, isscalar} = 51001        
@@ -726,16 +726,16 @@ classdef CORTOpyCommManager < CommManager
 
             bIsServerRunning = false;
 
-            if CORTOpyCommManager.checkUnix_()
+            if BlenderPyCommManager.checkUnix_()
                 % charBlenderModelPath             % Path of .blend file to load
-                % charCORTOpyInterfacePath         % Path to python Blender interface script
+                % charBlenderPyInterfacePath         % Path to python Blender interface script
                 % charStartBlenderServerCallerPath % Path to caller bash script
 
                 % DEVNOTE method works using the same assumption of RCS-1 code. The script is called by
                 % blender instead of as standalone. Next iterations will work by opening the server and
                 % setup everything calling Blender when needed for rendering
                 assert(isfile(charBlenderModelPath), sprintf('Blender model file %s not found.', charBlenderModelPath))
-                assert(isfile(charCORTOpyInterfacePath), sprintf('CORTO interface pyscript not found at %s.', charCORTOpyInterfacePath))
+                assert(isfile(charBlenderPyInterfacePath), sprintf('CORTO interface pyscript not found at %s.', charBlenderPyInterfacePath))
                 assert(isfile(charStartBlenderServerCallerPath), sprintf('Bash script to start CORTO interface pyscript not found at %s.', charStartBlenderServerCallerPath))
 
                 % Check if path has extesion
@@ -753,7 +753,7 @@ classdef CORTOpyCommManager < CommManager
 
                     % Construct command to run
                     charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
-                        charStartBlenderServerCallerPath, charBlenderModelPath, charCORTOpyInterfacePath);
+                        charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
 
                     % Logging options
                     if bSendLogToShellPipe == true
@@ -770,7 +770,7 @@ classdef CORTOpyCommManager < CommManager
                     pause(0.75); % Wait sockets instantiation
 
                     % Check server is running
-                    [bIsServerRunning] = CORTOpyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
+                    [bIsServerRunning] = BlenderPyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
 
                     if not(bIsServerRunning)
                         error("\nAttempt to start server using command: \t\n%s.\nHowever, the server did not started correctly. Check log if available.", charStartBlenderCommand)
@@ -799,7 +799,7 @@ classdef CORTOpyCommManager < CommManager
                 ui32NetworkPort (1,1) uint32 {isnumeric, isscalar}
             end
 
-            if CORTOpyCommManager.checkUnix_()
+            if BlenderPyCommManager.checkUnix_()
                 % TODO
                 % ui32BlenderRecvPort % Required in self
 
@@ -818,7 +818,7 @@ classdef CORTOpyCommManager < CommManager
         % Method to terminate server if running
         function [] = terminateBlenderProcessesStatic()
 
-            if CORTOpyCommManager.checkUnix_()
+            if BlenderPyCommManager.checkUnix_()
 
                 % Find the process
                 [~, charResult] = system('pgrep -f blender'); % Get the process ID(s) of blender
@@ -883,7 +883,7 @@ classdef CORTOpyCommManager < CommManager
             end
 
             % Convert all attitude matrices to quaternions used by Blender
-            dSunQuaternion_ToNavFrame    = CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
+            dSunQuaternion_ToNavFrame    = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
             dCameraQuaternion_ToNavFrame = DCM2quat(dCameraAttDCM_NavframeFromTF, false);
                 
             dBodiesQuaternion_ToNavFrame = zeros(4, ui32NumOfBodies);

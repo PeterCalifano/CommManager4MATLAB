@@ -33,8 +33,8 @@ charScriptName              = 'CORTO_UDP_TCP_interface.py';
 
 % charBlenderModelPath    = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
 charBlenderModelPath                = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
-charCORTOpyInterfacePath            = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/";
-charCORTOpyInterfacePath            = strcat(charCORTOpyInterfacePath, charScriptName);
+charBlenderPyInterfacePath            = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/";
+charBlenderPyInterfacePath            = strcat(charBlenderPyInterfacePath, charScriptName);
 charStartBlenderServerScriptPath    = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/StartBlenderServer.sh";
 
 charServerAddress = 'localhost';
@@ -45,11 +45,11 @@ i64RecvTCPsize = int64(4 * 2048 * 1536 * 64/8); % Number of bytes to read: 4*64*
 
 return
 
-%% CORTOpyCommManager_connectionWithoutAutoManagement
+%% BlenderPyCommManager_connectionWithoutAutoManagement
 
 % Construct command to run
 charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
-    charStartBlenderServerScriptPath, charBlenderModelPath, charCORTOpyInterfacePath);
+    charStartBlenderServerScriptPath, charBlenderModelPath, charBlenderPyInterfacePath);
 
 % system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
 charStartBlenderCommand = strcat(charStartBlenderCommand, " &");
@@ -60,9 +60,9 @@ system(charStartBlenderCommand);
 pause(1); % Wait sockets instantiation
 
 % Define cortopy comm. manager object initializing in place (connection to server)
-assert(CORTOpyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1)), 'Server startup attempt failed. Test cannot continue.')
+assert(BlenderPyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1)), 'Server startup attempt failed. Test cannot continue.')
 
-objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true);
 
 pause(0.25);
@@ -94,10 +94,10 @@ end
 clear objCortopyCommManager 
 return
 
-%% CORTOpyCommManager_serverManagementMethods
-objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+%% BlenderPyCommManager_serverManagementMethods
+objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', false, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath);
 
 % Start server using instance method
@@ -119,22 +119,22 @@ assert(bIsRunning)
 objCortopyCommManager.terminateBlenderProcessesStatic()
 
 return
-%% CORTOpyCommManager_serverAutoManagement
+%% BlenderPyCommManager_serverAutoManagement
 % Instance definition with automatic management of server
-objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath);
 
 % Delete instance and terminate server
 delete(objCortopyCommManager)
 return
-%% CORTOpyCommManager_renderImageFromPQ_
+%% BlenderPyCommManager_renderImageFromPQ_
 
 % Instance definition with automatic management of server
-objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i64RecvTCPsize);
 
@@ -155,12 +155,12 @@ dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector, ...
 imshow(dImg);
 pause(1);
 
-%% CORTOpyCommManager_renderImage
+%% BlenderPyCommManager_renderImage
 
 % Instance definition with automatic management of server
-objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i64RecvTCPsize);
 
@@ -190,7 +190,7 @@ pause(1);
 delete(objCortopyCommManager)
 return
 
-%% CORTOpyCommManager_renderImageSequence
+%% BlenderPyCommManager_renderImageSequence
 
 % TODO: load setup for SLAM simulations
 addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
@@ -198,12 +198,12 @@ run('loadSimulationSetup');
 
 % Overwrite model definition if needed
 charBlenderModelPath     = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
-charCORTOpyInterfacePath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py";
+charBlenderPyInterfacePath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py";
 
 % Instance definition with automatic management of server
-objCortopyCommManager = CORTOpyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', true, 'charCORTOpyInterfacePath', charCORTOpyInterfacePath, ...
+    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, ...
     "objCameraIntrisincs", objCamera);
@@ -241,7 +241,7 @@ for ui32TimestampID = 1:ui32NumOfImgs
 
 end
 
- [dSunAttQuat_Buffer_NavframeFromTF, dSunAttDCM_Buffer_NavframeFromTF] = CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
+ [dSunAttQuat_Buffer_NavframeFromTF, dSunAttDCM_Buffer_NavframeFromTF] = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
 
  
 % TODO: remove input DCM from Sun and convert position to quaternion internally!
