@@ -153,7 +153,7 @@ classdef CORTOpyCommManager < CommManager
                 end
 
             elseif not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                self.enumCommDataType = upper(self.strConfigYamlFilename.image_dtype);
+                self.enumCommDataType = upper(self.strConfigFromYaml.image_dtype);
             end
 
             if self.i64RecvTCPsize == -10
@@ -196,11 +196,12 @@ classdef CORTOpyCommManager < CommManager
                 % Get params from file
 
                 % Construct camera intrinsics object and assign
-                dFOV_x          = self.strConfigFromYaml.Camera_Params.FOV_x; % [deg] Horizontal Field of View
-                dFOV_y          = self.strConfigFromYaml.Camera_Params.FOV_Y; % [deg] Vertical Field of View
-                dSensor_size_x  = self.strConfigFromYaml.Camera_Params.sensor_size_x; % [px] Horizontal resolution
-                dSensor_size_y  = self.strConfigFromYaml.Camera_Params.sensor_size_y; % [px] Vertical resolution
-            
+                dFOV_x              = self.strConfigFromYaml.Camera_Params.FOV_x; % [deg] Horizontal Field of View
+                dFOV_y              = self.strConfigFromYaml.Camera_Params.FOV_Y; % [deg] Vertical Field of View
+                dSensor_size_x      = self.strConfigFromYaml.Camera_Params.sensor_size_x; % [px] Horizontal resolution
+                dSensor_size_y      = self.strConfigFromYaml.Camera_Params.sensor_size_y; % [px] Vertical resolution
+                ui32NumOfChannels   = self.strConfigFromYaml.Camera_Params.n_channels;
+
                 dPrincipalPoint_uv = [dSensor_size_x, dSensor_size_y]./2;
             
                 % TODO: add assert on rounding! Must be integer
@@ -209,7 +210,7 @@ classdef CORTOpyCommManager < CommManager
                 dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
 
                 % Construct camera intrinsics object
-                self.objCameraIntrinsics = CCameraIntrinsics( dFocalLength_uv, dPrincipalPoint_uv, [dSensor_size_x, dSensor_size_y] );
+                self.objCameraIntrinsics = CCameraIntrinsics( dFocalLength_uv, dPrincipalPoint_uv, [dSensor_size_x, dSensor_size_y], ui32NumOfChannels );
 
             else
                 % Assume Milani/RCS-1 NavCam parameters
@@ -227,6 +228,7 @@ classdef CORTOpyCommManager < CommManager
 
                 self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv, dPrincipalPoint, ui32ImageSize);
                 self.objCameraIntrinsics.ui32NumOfChannels = uint32(3);
+
                 dMSG_ENTRY_BYTES_SIZE = 8;
                 self.enumCommDataType = "DOUBLE";
 
@@ -325,7 +327,8 @@ classdef CORTOpyCommManager < CommManager
         end
 
         % METHODS
-
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % IMAGES SEQUENCE RENDERING from "disaggregated" scene data
         function [outImgArrays, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
                                                          dCameraOrigin_Buffer_NavFrame, ...
                                                          dCameraAttDCM_Buffer_NavframeFromTF, ...
@@ -336,53 +339,69 @@ classdef CORTOpyCommManager < CommManager
                 self
                 dSunVector_Buffer_NavFrame              (3,:)   double {isvector, isnumeric}
                 dCameraOrigin_Buffer_NavFrame           (3,:)   double {isvector, isnumeric}
-                dCameraAttDCM_Buffer_NavframeFromTF     (3,3,:,:) double {ismatrix, isnumeric}
+                dCameraAttDCM_Buffer_NavframeFromTF     (3,3,:) double {ismatrix, isnumeric}
                 dBodiesOrigin_Buffer_NavFrame           (3,:,:)   double {ismatrix, isnumeric} = zeroes(3,1)
                 dBodiesAttDCM_Buffer_NavFrameFromTF     (3,3,:,:) double {ismatrix, isnumeric} = eye(3)
             end
             arguments (Input)
                 kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
-                kwargs.charOutputDatatype              (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "double"
+                kwargs.charOutputDatatype              (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "uint8"
                 kwargs.ui32NumOfBodies                 (1,1) uint32 {isnumeric, isscalar} = 1
-                kwargs.objCameraIntrisincs             (1,1) {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
-                kwargs.bApplyBayerFilter               (1,1) logical {islogical, isscalar} = false;
-                kwargs.bIsImageRGB                     (1,1) logical {islogical, isscalar} = false;
+                kwargs.objCameraIntrinsics             (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
+                kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
             end
                 
+            % Determine number of images from camera origin array
+            ui32NumOfImages = uint32(size(dCameraOrigin_Buffer_NavFrame, 2));
+
+            % Determine number of bodies and check validity
+            % Default number of body is 1. Overridden by yaml configuration if any.
+            ui32NumOfBodies     = kwargs.ui32NumOfBodies;
+            if not(strcmpi(self.charConfigYamlFilename, ""))
+                ui32NumOfBodies = uint32(self.strConfigFromYaml.num_bodies);
+            end
+
+            if ui32NumOfBodies == 1
+                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 3);
+            else
+                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 4);
+            end
+
+            % Assert validity of other buffers
+            assert(size(dSunVector_Buffer_NavFrame, 2) == ui32NumOfImages, ...
+                'dSunVector_Buffer_NavFrame must have the same number of columns as images.');
+
+            assert(size(dCameraAttDCM_Buffer_NavframeFromTF, 3) == ui32NumOfImages, ...
+                'dCameraAttDCM_Buffer_NavframeFromTF must have the same 3rd dimension as images.');
+
+            assert(size(dBodiesOrigin_Buffer_NavFrame, 3) == kwargs.ui32NumOfBodies, ...
+                'dBodiesOrigin_Buffer_NavFrame must have the same 3rd dimension as number of bodies.');
+
+            assert(size(dBodiesAttDCM_Buffer_NavFrameFromTF, 4) == kwargs.ui32NumOfBodies, ...
+                'dBodiesAttDCM_Buffer_NavFrameFromTF must have the same 4th dimension as number of bodies.');
+
+
             % Optionally the user may instantiate the class or set the data for rendering sequence before calling this method. Default args uses class attributes.
             % TODO (PC) complete configuration setup for method. Need to add indexing of input yaml config
-            if kwargs.objCameraIntrisincs.bDefaultConstructed && self.objCameraIntrisincs.bDefaultConstructed
+            if kwargs.objCameraIntrinsics.bDefaultConstructed && self.objCameraIntrinsics.bDefaultConstructed
                 error('No camera parameters specified at instantiation or as input to this method. Please retry providing a valid CCameraIntrinsics object.')
             
-            elseif not(kwargs.objCameraIntrisincs.bDefaultConstructed) && not(self.objCameraIntrisincs.bDefaultConstructed)
+            elseif not(kwargs.objCameraIntrinsics.bDefaultConstructed) && not(self.objCameraIntrinsics.bDefaultConstructed)
                 warning('A valid CCameraIntrinsics is available from class instantiation but is overridden by input objCameraIntrisincs object.')
                 fprintf('\nUsing camera parameters from input object\n')
                 
-                objCameraIntrisincs = kwargs.objCameraIntrisincs;
+                objCameraIntrinsics_ = kwargs.objCameraIntrinsics;
 
-            elseif not(self.objCameraIntrisincs.bDefaultConstructed) && kwargs.objCameraIntrisincs.bDefaultConstructed
+            elseif not(self.objCameraIntrinsics.bDefaultConstructed) && kwargs.objCameraIntrinsics.bDefaultConstructed
                 % Get camera parameters from
-                objCameraIntrisincs = self.objCameraIntrisincs;
+                objCameraIntrinsics_ = self.objCameraIntrinsics;
 
             else
                 error('Invalid class configuration: error in retrieving camera parameters from instance or input!');
             end
 
 
-
-                ui32HorizontalSize      = self.strConfigFromYaml;
-                ui32VerticalSize        = self.strConfigFromYaml;
-                ui32NumOfBodies         = self.strConfigFromYaml;
-                ui32NumOfImgChannels    = self.strConfigFromYaml;
-
-
-                % Use input parameters (must all be specified)
-                ui32HorizontalSize      = kwargs.objCameraIntrisincs.ImageSize();
-                ui32VerticalSize        = kwargs.ui32VerticalSize    ;
-                ui32NumOfBodies         = kwargs.ui32NumOfBodies     ;
-                ui32NumOfImgChannels    = kwargs.ui32NumOfImgChannels;
-
-
+            % Determine target post and override instance setting if provided as input
             if kwargs.ui32TargetPort > 0
                 % Temporarily override set target port
                 ui32PrevPort = self.ui32TargetPort;
@@ -390,21 +409,15 @@ classdef CORTOpyCommManager < CommManager
             end
 
             % Input and validation checks 
-            % ui32NumOfImages = uint32();
-        
-            if ui32NumOfBodies == 1
-                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 3);
-                % TODO: complete
-            else
-                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 4);
-                % TODO: complete
-            end
                         
             % Rendering loop
-            outImgArrays = zeros(ui32HorizontalSize, ui32VerticalSize, ui32NumOfImgChannels, ui32NumOfImages, char(charOutputDatatype) );
+            outImgArrays = zeros(objCameraIntrinsics_.ImageSize(1), objCameraIntrinsics_.ImageSize(2), ...
+                objCameraIntrinsics_.ui32NumOfChannels, ui32NumOfImages, char( kwargs.charOutputDatatype) );
+            % CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
 
-                            % CORTOpyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
-
+            if kwargs.enumRenderingFrame == "CUSTOM_FRAME"
+                fprintf("\nScene data specified with respect to a custom frame. No check or transformation of the inputs is performed at rendering time.\n")
+            end
 
             for idImg = 1:ui32NumOfImages
                 
@@ -413,7 +426,6 @@ classdef CORTOpyCommManager < CommManager
                 dCameraOrigin_NavFrame          = dCameraOrigin_Buffer_NavFrame      (:, idImg);
                 dCameraAttDCM_NavframeFromTF    = dCameraAttDCM_Buffer_NavframeFromTF(:,:, idImg);
 
-                
                 if ui32NumOfBodies == 1
                     % Handle single body assuming 2D and 3D arrays as inputs
                     dBodiesOrigin_NavFrame          = dBodiesOrigin_Buffer_NavFrame      (:, idImg);
@@ -427,22 +439,22 @@ classdef CORTOpyCommManager < CommManager
 
                 % Call renderImage implementation ( TODO (PC) complete implementation ) 
                 dImg = self.renderImage(dSunVector_NavFrame, ...
-                                        dSunAttDCM_NavframeFromTF, ...
                                         dCameraOrigin_NavFrame, ...
                                         dCameraAttDCM_NavframeFromTF, ...
                                         dBodiesOrigin_NavFrame, ...
                                         dBodiesAttDCM_NavFrameFromTF, ...
-                                        kwargs); % TODO: specify kwargs and how to treat image
+                                        "enumRenderingFrame", kwargs.enumRenderingFrame, ...
+                                        "ui32TargetPort", kwargs.ui32TargetPort); % TODO: specify kwargs and how to treat image
 
                 % Store image into output array
-                outImgArrays(1:ui32HorizontalSize, 1:ui32VerticalSize, idImg) = cast(dImg, kwargs.charOutputDatatype);
+                outImgArrays(1:self.objCameraIntrinsics.ImageSize(1), 1:self.objCameraIntrinsics.ImageSize(2), idImg) = cast(dImg', kwargs.charOutputDatatype);
                 
                 % Get labels data
                 % TODO (PC) next upgrade, transmit through TCP? TBD
             end
         
             % Squeeze array if number of channels is equal to 1
-            if ui32NumOfImgChannels == 1
+            if objCameraIntrinsics_.ui32NumOfChannels == 1
                 outImgArrays = squeeze(outImgArrays);
             end
 
@@ -453,7 +465,8 @@ classdef CORTOpyCommManager < CommManager
 
         end
 
-        % Single image rendering from disaggregated scene data
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % SINGLE IMAGE RENDERING from "disaggregated" scene data
         function [dImg, self] = renderImage(self, dSunVector_NavFrame, ...
                                             dCameraOrigin_NavFrame, ...
                                             dCameraAttDCM_NavframeFromTF, ...
@@ -473,8 +486,6 @@ classdef CORTOpyCommManager < CommManager
                 kwargs.dRenderFrameOrigin              (3,1) double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
                 kwargs.dDCM_NavFrameFromRenderFrame    (3,3) double {ismatrix, isnumeric} = eye(3)
                 kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
-                kwargs.bApplyBayerFilter               (1,1) logical {islogical, isscalar} = false;
-                kwargs.bIsImageRGB                     (1,1) logical {islogical, isscalar} = false;
             end
             
             % Input size and validation checks
@@ -496,9 +507,18 @@ classdef CORTOpyCommManager < CommManager
                 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, ...
                 'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
 
+            
+            % TODO: rework renderImageFromPQ_ to avoid the need for these flags!
+            if self.objCameraIntrinsics.ui32NumOfChannels == 1
+                bApplyBayerFilter_ = false;
+                bIsImageRGB_       = false;
+            else
+                bApplyBayerFilter_ = true;
+                bIsImageRGB_       = true;
+            end
+
             % Call renderImageFromPQ_ implementation
-            [dImg, self] = self.renderImageFromPQ_(dSceneDataVector, ...
-                "bApplyBayerFilter", kwargs.bApplyBayerFilter, "bIsImageRGB", kwargs.bIsImageRGB);
+            [dImg, self] = self.renderImageFromPQ_(dSceneDataVector, "bApplyBayerFilter", bApplyBayerFilter_, "bIsImageRGB", bIsImageRGB_);
 
             % Reset target port to previous state
             if kwargs.ui32TargetPort > 0
@@ -525,8 +545,13 @@ classdef CORTOpyCommManager < CommManager
                 bIsImageRGB_         = options.bIsImageRGB      ;
             else
                 % LOAD FROM SELF
-                bApplyBayerFilter_   = self.bApplyBayerFilter;
-                bIsImageRGB_         = self.bIsImageRGB;
+                if self.objCameraIntrinsics.ui32NumOfChannels == 1
+                    bApplyBayerFilter_ = false;
+                    bIsImageRGB_       = false;
+                else
+                    bApplyBayerFilter_ = true;
+                    bIsImageRGB_       = true;
+                end
             end
 
             % Input check
@@ -600,11 +625,9 @@ classdef CORTOpyCommManager < CommManager
                 
                 % TODO (PC) You will need to modify the input to the class/function
                 % Implement and verify
-                ui32ImgHeight   = 2048;
-                ui32ImgWidth    = 1536;
 
-                dImg = zeros(ui32ImgHeight, ui32ImgWidth, 'double');
-                dImg(:, :) = reshape(transpose(dImgBuffer), ui32ImgHeight, ui32ImgWidth);
+                dImg = zeros(self.objCameraIntrinsics.ImageSize(1), self.objCameraIntrinsics.ImageSize(2), 'double');
+                dImg(:, :) = reshape(transpose(dImgBuffer), self.objCameraIntrinsics.ImageSize(1), self.objCameraIntrinsics.ImageSize(2));
 
                 % error('Not implemented yet. Requires size of camera to be known!')
                 % dImg = zeros(1536, 2048, 3, 'uint8');
@@ -853,6 +876,8 @@ classdef CORTOpyCommManager < CommManager
                 assert( all(dBodiesOrigin_NavFrame(:, 1) == 0, 'all') );
                 assert( all(dBodiesAttDCM_NavFrameFromTF(:,:,1) == eye(3), 'all') )
     
+            elseif kwargs.enumRenderingFrame == EnumRenderingFrame.CUSTOM_FRAME
+                % Check nothing, assume inputs are already in place
             else
                 error('Invalid or unsupported type of rendering frame')
             end
