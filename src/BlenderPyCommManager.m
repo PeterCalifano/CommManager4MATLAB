@@ -223,7 +223,7 @@ classdef BlenderPyCommManager < CommManager
                 dFOV_y = 16;
                 dSensor_size_x = 2048; % [px]
                 dSensor_size_y = 1536; 
-                ui32NumOfChannels = uint32(3);
+                ui32NumOfChannels = uint32(4); % RGBA
 
                 dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
                 ui32ImageSize = [dSensor_size_x, dSensor_size_y];
@@ -352,6 +352,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.objCameraIntrinsics             (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
                 kwargs.bEnableFramesPlot               (1,1) logical {islogical} = false;
+                kwargs.bConvertCamQuatToBlenderQuat    (1,1) logical {isscalar, islogical} = true;
             end
                 
             % Determine number of images from camera origin array
@@ -364,10 +365,14 @@ classdef BlenderPyCommManager < CommManager
                 ui32NumOfBodies = uint32(self.strConfigFromYaml.num_bodies);
             end
 
-            if ui32NumOfBodies == 1
+            if (ui32NumOfBodies == 1 && ui32NumOfImages > 1) || (ui32NumOfImages == 1 && ui32NumOfBodies > 1)
                 assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 3);
-            else
+            elseif ui32NumOfBodies == 1 && ui32NumOfImages == 1
+                assert( ismatrix(dBodiesAttDCM_Buffer_NavFrameFromTF));
+            elseif ui32NumOfBodies > 1 && ui32NumOfImages > 1
                 assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromTF) == 4);
+            else
+                error('Invalid size of dBodiesAttDCM_Buffer_NavFrameFromTF')
             end
 
             % Assert validity of other buffers
@@ -417,7 +422,7 @@ classdef BlenderPyCommManager < CommManager
             % outImgArrays = zeros(objCameraIntrinsics_.ImageSize(1), objCameraIntrinsics_.ImageSize(2), ...
             %     objCameraIntrinsics_.ui32NumOfChannels, ui32NumOfImages, char( kwargs.charOutputDatatype) );
 
-            outImgArrays = zeros(objCameraIntrinsics_.ImageSize(1), objCameraIntrinsics_.ImageSize(2), ...
+            outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), ...
                 ui32NumOfImages, char( kwargs.charOutputDatatype) );
             % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
 
@@ -476,20 +481,24 @@ classdef BlenderPyCommManager < CommManager
                                         dBodiesOrigin_NavFrame, ...
                                         dBodiesAttDCM_NavFrameFromTF, ...
                                         "enumRenderingFrame", kwargs.enumRenderingFrame, ...
-                                        "ui32TargetPort", kwargs.ui32TargetPort); % TODO: specify kwargs and how to treat image
+                                        "ui32TargetPort", kwargs.ui32TargetPort, ...
+                                        "bConvertCamQuatToBlenderQuat", kwargs.bConvertCamQuatToBlenderQuat); % TODO: specify kwargs and how to treat image
 
 
                 % Store image into output array
-                outImgArrays(1:self.objCameraIntrinsics.ImageSize(1), 1:self.objCameraIntrinsics.ImageSize(2), idImg) = cast(dImg', kwargs.charOutputDatatype);
+                outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), idImg) = cast(dImg, kwargs.charOutputDatatype);
                 fprintf("Completed image %d of %d.\n", idImg, ui32NumOfImages)
 
                 % Get labels data
                 % TODO (PC) next upgrade, transmit through TCP? TBD
 
                 pause(0.5)
-                close(objSceneFigs(idImg)); % Close figure to prevent accumulation
+                
+                if kwargs.bEnableFramesPlot
+                    close(objSceneFigs(idImg)); % Close figure to prevent accumulation
+                end
             end
-        
+
             % Squeeze array if number of channels is equal to 1
             if objCameraIntrinsics_.ui32NumOfChannels == 1
                 outImgArrays = squeeze(outImgArrays);
@@ -543,7 +552,8 @@ classdef BlenderPyCommManager < CommManager
                 dCameraAttDCM_NavframeFromTF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromTF, ...
                 'enumRenderingFrame', kwargs.enumRenderingFrame, ...
                 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, ...
-                'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame);
+                'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame, ...
+                'bConvertCamQuatToBlenderQuat', kwargs.bConvertCamQuatToBlenderQuat);
 
             
             % TODO: rework renderImageFromPQ_ to avoid the need for these flags!
@@ -715,6 +725,10 @@ classdef BlenderPyCommManager < CommManager
             dG = dImgBuffer(2:4:end);
             dB = dImgBuffer(3:4:end);
 
+            assert(length(dR) == ui32ImgWidth * ui32ImgHeight, 'Incorrect size of image buffer, not matching specified resolution. Something may have gone wrong in the configuration.')
+            assert(length(dG) == ui32ImgWidth * ui32ImgHeight, 'Incorrect size of image buffer, not matching specified resolution. Something may have gone wrong in the configuration.')
+            assert(length(dB) == ui32ImgWidth * ui32ImgHeight, 'Incorrect size of image buffer, not matching specified resolution. Something may have gone wrong in the configuration.')
+
             % Reshape the RGB channels as matrix
             dR = ( flip( reshape( dR', ui32ImgWidth, ui32ImgHeight), 2) )';
             dG = ( flip( reshape( dG', ui32ImgWidth, ui32ImgHeight), 2) )';
@@ -802,10 +816,10 @@ classdef BlenderPyCommManager < CommManager
                     % Logging options
                     if bSendLogToShellPipe == true
                         system('mkfifo /tmp/blender_pipe') % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
-                        charStartBlenderCommand = strcat(charStartBlenderCommand, " > /tmp/blender_pipe &");
+                        charStartBlenderCommand = char(strcat(charStartBlenderCommand, " > /tmp/blender_pipe &"));
                         charLogPipePath = "Logging to pipe: /tmp/blender_pipe";
                     else
-                        charStartBlenderCommand = strcat(charStartBlenderCommand, " &");
+                        charStartBlenderCommand = char(strcat(charStartBlenderCommand, " &"));
                         charLogPipePath = "Log disabled.";
                     end
 
@@ -903,7 +917,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.enumRenderingFrame              (1,1)    EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
                 kwargs.dRenderFrameOrigin              (3,1)    double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
                 kwargs.dDCM_NavFrameFromRenderFrame    (3,3)    double {ismatrix, isnumeric} = eye(3)
-                kwargs.bConvertCamQuatToBlenderQuat    (1,1)    logical {islogical, isscalar} = true;
+                kwargs.bConvertCamQuatToBlenderQuat    (1,1)    logical {islogical, isscalar} = false;
             end
 
             % Get number of bodies
