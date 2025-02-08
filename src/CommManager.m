@@ -142,7 +142,7 @@ classdef CommManager < handle
 
             if kwargs.bInitInPlace
                 fprintf("\tInstantiation of CommManager completed. Attempting to open communication...\n")
-                self = self.Initialize();
+                self.Initialize();
             else
                 fprintf("\tInstantiation of CommManager completed.\n")
             end
@@ -338,7 +338,7 @@ classdef CommManager < handle
                         fprintf(['\nDo you need to recv a fixed size buffer of known size and/or the first 4 bytes do not specify the length? \n' ...
                             'Please specify "i64RecvTCPsize" kwarg at class instantiation to enable this TCP recv mode!.\n']);
                     end
-                    error(ME)
+                    error(string(ME.message))
                 end
 
                 % Allocate buffer to property
@@ -447,7 +447,7 @@ classdef CommManager < handle
         % DEVNOTE: may be implemented by overloading/overriding the subsref method such that it gets called
         % at each dot indexing (properties included) automatically.
         function assertInit(self)
-            assert(self.bCommManagerReady == true, 'Class not initialized correctly. You need to establish connection before use! Call instance.Initialize() or pass flag bInitInPlace as true.')
+            assert(self.bCommManagerReady == true, 'Instance not initialized correctly. You need to establish connection before use! Call instance.Initialize() or pass flag bInitInPlace as true.')
         end
 
         function bIsValid = isValidDataStruct(objdataStructToWrite)

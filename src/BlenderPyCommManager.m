@@ -14,12 +14,15 @@ classdef BlenderPyCommManager < CommManager
     % 20-01-2025    Pietro Califano     Implementation of methods for Blender inputs preparation and
     %                                   rendering loop execution for dataset generation.
     % 31-01-2024    Pietro Califano     Implement auto management of Blender server for Linux.
+    % 07-02-2025    Pietro Califano     Major update of class to introduce camera object, improve
+    %                                   configuration and communication handling. Render methods tested.
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
-    % [-]
+    % Functions and classes in SimulationGears_for_SpaceNav repository. Specifiocally, CCameraIntrinsics.
+    % git@github.com:PeterCalifano/SimulationGears_for_SpaceNav.git
     % -------------------------------------------------------------------------------------------------------------
     %% Future upgrades
-    % 1) Move yaml configuration parser in parent classes instead of this specific TBD
+    % [-]
     % -------------------------------------------------------------------------------------------------------------
     %% Function code
 
@@ -220,17 +223,16 @@ classdef BlenderPyCommManager < CommManager
                 dFOV_y = 16;
                 dSensor_size_x = 2048; % [px]
                 dSensor_size_y = 1536; 
+                ui32NumOfChannels = uint32(3);
 
                 dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
-                
                 ui32ImageSize = [dSensor_size_x, dSensor_size_y];
                 dPrincipalPoint = double(ui32ImageSize)/2;
 
-                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv, dPrincipalPoint, ui32ImageSize);
-                self.objCameraIntrinsics.ui32NumOfChannels = uint32(3);
+                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv, dPrincipalPoint, ui32ImageSize, ui32NumOfChannels);
 
                 dMSG_ENTRY_BYTES_SIZE = 8;
-                self.enumCommDataType = "DOUBLE";
+                self.enumCommDataType = EnumCommDataType.DOUBLE;
 
                 % Assign TCP recv size (fixed in Milani/RCS-1 case
                 % self.i64RecvTCPsize = int64(4 * 2048 * 1536 * dBYTES_IN_DOUBLE);
@@ -349,6 +351,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.ui32NumOfBodies                 (1,1) uint32 {isnumeric, isscalar} = 1
                 kwargs.objCameraIntrinsics             (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.bEnableFramesPlot               (1,1) logical {islogical} = false;
             end
                 
             % Determine number of images from camera origin array
@@ -411,8 +414,11 @@ classdef BlenderPyCommManager < CommManager
             % Input and validation checks 
                         
             % Rendering loop
+            % outImgArrays = zeros(objCameraIntrinsics_.ImageSize(1), objCameraIntrinsics_.ImageSize(2), ...
+            %     objCameraIntrinsics_.ui32NumOfChannels, ui32NumOfImages, char( kwargs.charOutputDatatype) );
+
             outImgArrays = zeros(objCameraIntrinsics_.ImageSize(1), objCameraIntrinsics_.ImageSize(2), ...
-                objCameraIntrinsics_.ui32NumOfChannels, ui32NumOfImages, char( kwargs.charOutputDatatype) );
+                ui32NumOfImages, char( kwargs.charOutputDatatype) );
             % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
 
             if kwargs.enumRenderingFrame == "CUSTOM_FRAME"
@@ -437,6 +443,11 @@ classdef BlenderPyCommManager < CommManager
                     dBodiesAttDCM_NavFrameFromTF    = dBodiesAttDCM_Buffer_NavFrameFromTF(:,:,:, idImg);
                 end
 
+                if kwargs.bEnableFramesPlot
+                    % TODO
+                end
+
+                fprintf("\nSending data to render image %d of %d...\n", idImg, ui32NumOfImages)
                 % Call renderImage implementation ( TODO (PC) complete implementation ) 
                 dImg = self.renderImage(dSunVector_NavFrame, ...
                                         dCameraOrigin_NavFrame, ...
@@ -446,11 +457,14 @@ classdef BlenderPyCommManager < CommManager
                                         "enumRenderingFrame", kwargs.enumRenderingFrame, ...
                                         "ui32TargetPort", kwargs.ui32TargetPort); % TODO: specify kwargs and how to treat image
 
+
                 % Store image into output array
                 outImgArrays(1:self.objCameraIntrinsics.ImageSize(1), 1:self.objCameraIntrinsics.ImageSize(2), idImg) = cast(dImg', kwargs.charOutputDatatype);
-                
+                fprintf("Completed image %d of %d.\n", idImg, ui32NumOfImages)
+
                 % Get labels data
                 % TODO (PC) next upgrade, transmit through TCP? TBD
+                pause(0.5)
             end
         
             % Squeeze array if number of channels is equal to 1
@@ -483,9 +497,10 @@ classdef BlenderPyCommManager < CommManager
             end
             arguments % kwargs arguments
                 kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.dRenderFrameOrigin              (3,1) double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_NavFrameFromRenderFrame    (3,3) double {ismatrix, isnumeric} = eye(3)
-                kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
+                kwargs.dRenderFrameOrigin              (3,1) double  {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_NavFrameFromRenderFrame    (3,3) double  {ismatrix, isnumeric} = eye(3)
+                kwargs.ui32TargetPort                  (1,1) uint32  {isscalar, isnumeric} = 0
+                kwargs.bConvertCamQuatToBlenderQuat    (1,1) logical {isscalar, islogical} = true;
             end
             
             % Input size and validation checks
@@ -664,7 +679,10 @@ classdef BlenderPyCommManager < CommManager
             % 13-01-2025    Pietro Califano     Adapted from legacy code of milani-gnc
             % -------------------------------------------------------------------------------------------------------------
 
-            dImgRGB = zeros(1536, 2048, 3, 'double');
+            ui32ImgHeight   = self.objCameraIntrinsics.ImageSize(2);
+            ui32ImgWidth    = self.objCameraIntrinsics.ImageSize(1);
+
+            dImgRGB = zeros(ui32ImgHeight, ui32ImgWidth, 3, 'double');
 
             % Decompose the ImgPackage in the 4 RGBA channels
             dR = dImgBuffer(1:4:end);
@@ -672,9 +690,9 @@ classdef BlenderPyCommManager < CommManager
             dB = dImgBuffer(3:4:end);
 
             % Reshape the RGB channels as matrix
-            dR = (flip(reshape(dR',2048,1536),2))';
-            dG = (flip(reshape(dG',2048,1536),2))';
-            dB = (flip(reshape(dB',2048,1536),2))';
+            dR = ( flip( reshape( dR', ui32ImgWidth, ui32ImgHeight), 2) )';
+            dG = ( flip( reshape( dG', ui32ImgWidth, ui32ImgHeight), 2) )';
+            dB = ( flip( reshape( dB', ui32ImgWidth, ui32ImgHeight), 2) )';
 
             % Compose the RGB tensor
             dImgRGB(:,:,1) = dR;
@@ -692,7 +710,7 @@ classdef BlenderPyCommManager < CommManager
             % This function convert the RGB image of the environment into one generted
             % by the Milani NavCam with a 'bgrr' pattern
 
-            dImgBayer = zeros(1536, 2048);
+            dImgBayer = zeros(self.objCameraIntrinsics.ImageSize(2), self.objCameraIntrinsics.ImageSize(1));
 
             % Generate the pattern of the bayer filter
             dBayerFilter = BlenderPyCommManager.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
@@ -767,7 +785,7 @@ classdef BlenderPyCommManager < CommManager
 
                     % Execute the command
                     system(charStartBlenderCommand);
-                    pause(0.75); % Wait sockets instantiation
+                    pause(1); % Wait sockets instantiation
 
                     % Check server is running
                     [bIsServerRunning] = BlenderPyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
@@ -857,8 +875,9 @@ classdef BlenderPyCommManager < CommManager
             end
             arguments % kwargs arguments
                 kwargs.enumRenderingFrame              (1,1)    EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.dRenderFrameOrigin              (3,1)   double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_NavFrameFromRenderFrame    (3,3)   double {ismatrix, isnumeric} = eye(3)
+                kwargs.dRenderFrameOrigin              (3,1)    double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_NavFrameFromRenderFrame    (3,3)    double {ismatrix, isnumeric} = eye(3)
+                kwargs.bConvertCamQuatToBlenderQuat    (1,1)    logical {islogical, isscalar} = true;
             end
 
             % Get number of bodies
@@ -886,6 +905,11 @@ classdef BlenderPyCommManager < CommManager
             dSunQuaternion_ToNavFrame    = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
             dCameraQuaternion_ToNavFrame = DCM2quat(dCameraAttDCM_NavframeFromTF, false);
                 
+            if kwargs.bConvertCamQuatToBlenderQuat
+                % Rotate about Y axis to invert Z axis % TODO
+                dCameraQuaternion_ToNavFrame = transpose(quatmultiply(dCameraQuaternion_ToNavFrame', [0,1,0,0]));
+            end
+
             dBodiesQuaternion_ToNavFrame = zeros(4, ui32NumOfBodies);
 
             for idB = 1:ui32NumOfBodies
