@@ -62,7 +62,7 @@ pause(1); % Wait sockets instantiation
 % Define cortopy comm. manager object initializing in place (connection to server)
 assert(BlenderPyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1)), 'Server startup attempt failed. Test cannot continue.')
 
-objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true);
 
 pause(0.25);
@@ -91,48 +91,48 @@ else
     error("This code should not run for Windows as the InitFcn of the model performs the task directly. Report using issues please.")
 end
 
-clear objCortopyCommManager 
+clear objBlenderPyCommManager 
 return
 
 %% BlenderPyCommManager_serverManagementMethods
-objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath);
 
 % Start server using instance method
-bIsRunning = objCortopyCommManager.startBlenderServer();
+bIsRunning = objBlenderPyCommManager.startBlenderServer();
 
 % Check if server is ok
-bIsRunning(:) = objCortopyCommManager.checkRunningBlenderServer();
+bIsRunning(:) = objBlenderPyCommManager.checkRunningBlenderServer();
 assert(bIsRunning)
 
 % Attempt connection
-objCortopyCommManager.Initialize();
+objBlenderPyCommManager.Initialize();
 
 % Delete instance and terminate server
-delete(objCortopyCommManager) % MUST NOT close server
-bIsRunning(:) = objCortopyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1));
+delete(objBlenderPyCommManager) % MUST NOT close server
+bIsRunning(:) = objBlenderPyCommManager.checkRunningBlenderServerStatic(ui32ServerPort(1));
 assert(bIsRunning)
 
 % Terminate server manually
-objCortopyCommManager.terminateBlenderProcessesStatic()
+objBlenderPyCommManager.terminateBlenderProcessesStatic()
 
 return
 %% BlenderPyCommManager_serverAutoManagement
 % Instance definition with automatic management of server
-objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath);
 
 % Delete instance and terminate server
-delete(objCortopyCommManager)
+delete(objBlenderPyCommManager)
 return
 %% BlenderPyCommManager_renderImageFromPQ_
 
 % Instance definition with automatic management of server
-objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
@@ -144,7 +144,7 @@ dSceneDataVector = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%
 % Test renderImageFromPQ_ method
 bApplyBayerFilter = true;
 bIsImageRGB = true;
-dImg = objCortopyCommManager.renderImageFromPQ_(dSceneDataVector, ...
+dImg = objBlenderPyCommManager.renderImageFromPQ_(dSceneDataVector, ...
     "bApplyBayerFilter", bApplyBayerFilter, "bIsImageRGB", bIsImageRGB); 
 
 
@@ -158,7 +158,7 @@ pause(1);
 %% BlenderPyCommManager_renderImage
 
 % Instance definition with automatic management of server
-objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
@@ -175,7 +175,7 @@ dBodiesOrigin_NavFrame          = dBody1Pos;
 dBodiesAttDCM_NavFrameFromTF    = quat2dcm(dBody1Quat);
 
 % Test renderImage method
-dImg = objCortopyCommManager.renderImage(dSunVector_NavFrame, ...
+dImg = objBlenderPyCommManager.renderImage(dSunVector_NavFrame, ...
                                         dCameraOrigin_NavFrame', ...
                                         dCameraAttDCM_NavframeFromTF, ...
                                         dBodiesOrigin_NavFrame', ...
@@ -187,10 +187,17 @@ pause(1);
 
 
 % Delete instance and terminate server
-delete(objCortopyCommManager)
+delete(objBlenderPyCommManager)
 return
 
-%% BlenderPyCommManager_renderImageSequence
+%% BlenderPyCommManager_renderImage_Itokawa
+% SUN:   POS [-2.18005798e+11  8.93741503e+09  5.85809786e+09] - Q [ 0.68231001  0.18561531 -0.67240421 -0.21879803]
+% SC:    POS [1594.63312307 -823.53098889 -815.84840801] - Q [0.83350509 0.18311617 0.50946444 0.11037991]
+% BODY (0):   POS: [0. 0. 0.] - Q [-4.04115385e-03  9.89996486e-01 -1.41033289e-01  4.87484429e-04]
+
+
+%% BlenderPyCommManager_renderImageSequence_Itokawa
+clear objBlenderPyCommManager
 
 % TODO: load setup for SLAM simulations
 addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
@@ -200,24 +207,26 @@ run('loadSimulationSetup');
 charBlenderModelPath     = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
 charBlenderPyInterfacePath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py";
 
+objCamera.ui32NumOfChannels = 4;
+dCommTimeout = 60;
 % Instance definition with automatic management of server
-objCortopyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
+    'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, ...
     "objCameraIntrisincs", objCamera);
 
-
 % Define scene 
 ui32NumOfImgs = 2;% length(strScenConfig.dTimestamps)
+ui32SceneIDs = [1,2];
 
 % Nav frame is TARGET BODY frame
 % Convert Blender quaternions to DCM for testing
 dSunVector_Buffer_NavFrame             = zeros(3, ui32NumOfImgs);
 dSunAttDCM_Buffer_NavframeFromTF       = zeros(3,3, ui32NumOfImgs);
 dCameraOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
-dCameraAttDCM_Buffer_NavframeFromTF6    = zeros(3, 3, ui32NumOfImgs);
+dCameraAttDCM_Buffer_NavframeFromTF    = zeros(3, 3, ui32NumOfImgs);
 dBodiesOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
 dBodiesAttDCM_Buffer_NavFrameFromTF    = zeros(3, 3, ui32NumOfImgs);
 
@@ -225,36 +234,51 @@ dBodiesAttDCM_Buffer_NavFrameFromTF    = zeros(3, 3, ui32NumOfImgs);
 % Construct scene buffers
 for ui32TimestampID = 1:ui32NumOfImgs
 
-    error('Inputs do not match. Either all in TB or all in IN ;)')
     % Nav frame is TARGET BODY frame
-    dSunPositions_TB = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
+    % dSunPositions_TB = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
     % dSunDirGT_TB = dSunDirGT_TB./norm(dSunDirGT_TB);
 
-    dSunVector_Buffer_NavFrame(:, ui32TimestampID)               = dSunPositions_TB;
+    dSunVector_Buffer_NavFrame(:, ui32TimestampID)               = strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
     % dSunAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)      = quat2dcm(dSunQuat);
 
-    dCameraOrigin_Buffer_NavFrame(:, ui32TimestampID)            = strReferenceData.dxSCref_IN(1:3, ui32TimestampID);
-    dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)   = transpose(strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID));
+    dCameraOrigin_Buffer_NavFrame(:, ui32TimestampID)            = strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/1000;
+    dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)   = strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID);
     
-    % dBodiesOrigin_Buffer_NavFrame(:, ui32TimestampID)            = zeros(3,1);
-    dBodiesAttDCM_Buffer_NavFrameFromTF(:, :, ui32TimestampID)   = transpose(strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID));
+    dBodiesOrigin_Buffer_NavFrame(:, ui32TimestampID)            = zeros(3,1);
+    dBodiesAttDCM_Buffer_NavFrameFromTF(:, :, ui32TimestampID)   = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID);
 
 end
 
- [dSunAttQuat_Buffer_NavframeFromTF, dSunAttDCM_Buffer_NavframeFromTF] = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
+% Test computation of Sun direction in batch (static method)
+[dSunAttQuat_Buffer_NavframeFromTF, dSunAttDCM_Buffer_NavframeFromTF] = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
 
- 
-% TODO: remove input DCM from Sun and convert position to quaternion internally!
+% Plot reference frames of ith scene
+objSceneArray = gobjects(length(ui32SceneIDs), 1);
+
+for ui32SceneID = ui32SceneIDs
+
+    % Convert DCMs to quaternion
+    dSceneEntityQuatArray_RenderFrameFromTF = dcm2quat(dBodiesAttDCM_Buffer_NavFrameFromTF(:,:, ui32SceneID))';
+    dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID))';
+
+
+    % Construct figure with plot
+    [objSceneArray(ui32SceneID)] = PlotSceneFrames_Quat(dBodiesOrigin_Buffer_NavFrame(:, ui32SceneID), ...
+        dSceneEntityQuatArray_RenderFrameFromTF, ...
+        dCameraOrigin_Buffer_NavFrame(:, ui32SceneID), ...
+        dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true);
+
+end
 
 % Test renderImage method
-ui8OutImgArrays = objCortopyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
+ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
                                                  dCameraOrigin_Buffer_NavFrame, ...
                                                  dCameraAttDCM_Buffer_NavframeFromTF, ...
                                                  dBodiesOrigin_Buffer_NavFrame, ...
                                                  dBodiesAttDCM_Buffer_NavFrameFromTF, ...
                                                  "charOutputDatatype", "uint8");
 
-figure;
+figure
 imshow(ui8OutImgArrays(:,:,1))
 
 figure;
