@@ -331,7 +331,7 @@ classdef BlenderPyCommManager < CommManager
         % METHODS
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % IMAGES SEQUENCE RENDERING from "disaggregated" scene data
-        function [outImgArrays, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
+        function [outImgArrays, objSceneFigs, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
                                                          dCameraOrigin_Buffer_NavFrame, ...
                                                          dCameraAttDCM_Buffer_NavframeFromTF, ...
                                                          dBodiesOrigin_Buffer_NavFrame, ...
@@ -425,6 +425,8 @@ classdef BlenderPyCommManager < CommManager
                 fprintf("\nScene data specified with respect to a custom frame. No check or transformation of the inputs is performed at rendering time.\n")
             end
 
+            objSceneFigs = gobjects(ui32NumOfImages, 1);
+
             for idImg = 1:ui32NumOfImages
                 
                 % Get data from buffers
@@ -443,8 +445,27 @@ classdef BlenderPyCommManager < CommManager
                     dBodiesAttDCM_NavFrameFromTF    = dBodiesAttDCM_Buffer_NavFrameFromTF(:,:,:, idImg);
                 end
 
-                if kwargs.bEnableFramesPlot
-                    % TODO
+                try
+                    if kwargs.bEnableFramesPlot
+                        fprintf("\nProducing requested visualization of scene frames to render...\n")
+
+                            % Convert DCMs to quaternion
+                            dSceneEntityQuatArray_RenderFrameFromTF = dcm2quat(dBodiesAttDCM_NavFrameFromTF)';
+                            dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_NavframeFromTF)';
+
+                            dCameraQuat_RenderFrameFromCam = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(dCameraQuat_RenderFrameFromCam);
+
+                            % Construct figure with plot
+                            [objSceneFigs(idImg)] = PlotSceneFrames_Quat(dBodiesOrigin_NavFrame, ...
+                                                                                dSceneEntityQuatArray_RenderFrameFromTF, ...
+                                                                                dCameraOrigin_NavFrame, ...
+                                                                                dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true, ...
+                                                                                "charFigTitle", "Visualization with Blender camera quaternion");
+                    end
+
+                catch ME
+                    warning("Failed to reproduce visualization of scene frames due to error.")
+                    fprintf("\n%s", string(ME.message))
                 end
 
                 fprintf("\nSending data to render image %d of %d...\n", idImg, ui32NumOfImages)
@@ -464,7 +485,9 @@ classdef BlenderPyCommManager < CommManager
 
                 % Get labels data
                 % TODO (PC) next upgrade, transmit through TCP? TBD
+
                 pause(0.5)
+                close(objSceneFigs(idImg)); % Close figure to prevent accumulation
             end
         
             % Squeeze array if number of channels is equal to 1
@@ -542,13 +565,14 @@ classdef BlenderPyCommManager < CommManager
 
         end
 
-
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % SINGLE IMAGE RENDERING from PQ scene data (intended as internal implementation, but exposed)
         function [dImg, self] = renderImageFromPQ_(self, dSceneDataVector, options)
             arguments
                 self       (1,1)
                 dSceneDataVector (1,:) double {isvector, isnumeric}
             end
-            arguments
+            arguments % TODO: remove these options and replace with camera object from self
                 options.bApplyBayerFilter (1,1) logical {islogical, isscalar} = false; 
                 options.bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
             end
@@ -582,8 +606,14 @@ classdef BlenderPyCommManager < CommManager
 
             % Wait for data reception from BlenderPy
             [~, recvDataBuffer, self] = self.ReadBuffer(); 
-            % Cast data to double
-            recvDataVector = typecast(recvDataBuffer, 'double');
+
+            % Cast data to selected datatype
+            if self.enumCommDataType == EnumCommDataType.UNSET
+                warning('Data type in instance attribute is UNSET at buffer conversion! This should not have occurred. Default to double to prevent error: result may be incorrect.')
+                self.enumCommDataType = EnumCommDataType.DOUBLE;
+            end
+
+            recvDataVector = typecast(recvDataBuffer, lower(string(self.enumCommDataType)));
 
             % Cast buffer to double and display image % TODO (PC): TBC if to keep here. May be moved to
             % acquireFrame of frontend algorithm branch?
@@ -637,16 +667,12 @@ classdef BlenderPyCommManager < CommManager
                 % Call external function
                 dImg = self.unpackImageFromCORTO_impl(dImgBuffer, bApplyBayerFilter);
             else
-                
+                error('Current version of the BlenderPy server api only ships RGB data. Remove this error once updated.')
                 % TODO (PC) You will need to modify the input to the class/function
                 % Implement and verify
 
                 dImg = zeros(self.objCameraIntrinsics.ImageSize(1), self.objCameraIntrinsics.ImageSize(2), 'double');
                 dImg(:, :) = reshape(transpose(dImgBuffer), self.objCameraIntrinsics.ImageSize(1), self.objCameraIntrinsics.ImageSize(2));
-
-                % error('Not implemented yet. Requires size of camera to be known!')
-                % dImg = zeros(1536, 2048, 3, 'uint8');
-
             end
         end
 
@@ -886,17 +912,18 @@ classdef BlenderPyCommManager < CommManager
             
             % TODO: based on selected rendering frame, assert identity and origin
             if kwargs.enumRenderingFrame == EnumRenderingFrame.CAMERA
-
+                fprintf('\n\tUsing CAMERA frame as Rendering frame...\n')
                 assert( all(dCameraOrigin_NavFrame == 0, 'all') );
                 assert( all(dCameraAttDCM_NavframeFromTF == eye(3), 'all') )
     
             elseif kwargs.enumRenderingFrame == EnumRenderingFrame.TARGET_BODY
-
+                fprintf('\n\tUsing TARGET_BODY frame as Rendering frame...')
                 assert( all(dBodiesOrigin_NavFrame(:, 1) == 0, 'all') );
                 assert( all(dBodiesAttDCM_NavFrameFromTF(:,:,1) == eye(3), 'all') )
     
             elseif kwargs.enumRenderingFrame == EnumRenderingFrame.CUSTOM_FRAME
-                % Check nothing, assume inputs are already in place
+                % No check, assume inputs are already in place
+                fprintf('\n\tUsing CUSTOM_FRAME frame as Rendering frame...')
             else
                 error('Invalid or unsupported type of rendering frame')
             end
@@ -906,10 +933,9 @@ classdef BlenderPyCommManager < CommManager
             dCameraQuaternion_ToNavFrame = DCM2quat(dCameraAttDCM_NavframeFromTF, false);
                 
             if kwargs.bConvertCamQuatToBlenderQuat
-                % Rotate about Y axis to invert Z axis % TODO
-                dCameraQuaternion_ToNavFrame = transpose(quatmultiply(dCameraQuaternion_ToNavFrame', [0,1,0,0]));
+                dCameraQuaternion_ToNavFrame = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(dCameraQuaternion_ToNavFrame);
             end
-
+            
             dBodiesQuaternion_ToNavFrame = zeros(4, ui32NumOfBodies);
 
             for idB = 1:ui32NumOfBodies
@@ -1020,6 +1046,33 @@ classdef BlenderPyCommManager < CommManager
 
             end
 
+        end
+
+
+        % Static method to convert camera quaternion to blender camera quaternion (inverse Z axis)
+        function [dCameraBlendQuatArray] = convertCamQuatToBlenderQuatStatic(dCameraQuaternionArray)
+            arguments
+                dCameraQuaternionArray (4,:) double {ismatrix, isnumeric}
+            end
+
+            dCameraBlendQuatArray = zeros(size(dCameraQuaternionArray));
+
+            for idQ = 1:size(dCameraQuaternionArray, 2)
+                dCameraBlendQuatArray(1:4, idQ) = quatmultiply( [0,1,0,0], dCameraQuaternionArray(1:4,idQ)');
+            end
+        end
+
+        % Static method to convert blender camera quaternion to camera quaternion (normal Z axis)
+        function [dCameraQuaternionArray] = convertBlenderQuatToCamQuatStatic(dCameraBlendQuatArray)
+            arguments
+                dCameraBlendQuatArray (4,:) double {ismatrix, isnumeric}
+            end
+
+            dCameraQuaternionArray = zeros(size(dCameraBlendQuatArray));
+
+            for idQ = 1:size(dCameraBlendQuatArray, 2)
+                dCameraQuaternionArray(1:4, idQ) = quatmultiply(dCameraBlendQuatArray(1:4,idQ)', [0,1,0,0]);
+            end
         end
 
         % TODO (PC) make this function generic. Currently only for Milani NavCam!
