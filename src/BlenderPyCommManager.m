@@ -610,12 +610,15 @@ classdef BlenderPyCommManager < CommManager
 
             % Cast to bytes
             ui8SceneDataBuffer = typecast(dSceneDataVector, 'uint8');
+            
             % Send to BlenderPy server
+            pause(0.1);
             writtenBytes = self.WriteBuffer(ui8SceneDataBuffer, false);
             fprintf('\n\tSent %d bytes. Image requested. Waiting for data...\n', writtenBytes)
 
             % Wait for data reception from BlenderPy
             [~, recvDataBuffer, self] = self.ReadBuffer(); 
+            pause(0.1);
 
             % Cast data to selected datatype
             if self.enumCommDataType == EnumCommDataType.UNSET
