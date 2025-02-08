@@ -198,20 +198,22 @@ return
 
 %% BlenderPyCommManager_renderImageSequence_Itokawa
 clear objBlenderPyCommManager
-
+close all
+pause(0.2);
 % TODO: load setup for SLAM simulations
 addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
 run('loadSimulationSetup');
 
 % Overwrite model definition if needed
-charBlenderModelPath     = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
+% charBlenderModelPath       = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
+% charBlenderModelPath       = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
 charBlenderPyInterfacePath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py";
 
 objCamera.ui32NumOfChannels = 4;
 dCommTimeout = 60;
 % Instance definition with automatic management of server
 objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
-    'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, ...
@@ -252,23 +254,44 @@ end
 % Test computation of Sun direction in batch (static method)
 [dSunAttQuat_Buffer_NavframeFromTF, dSunAttDCM_Buffer_NavframeFromTF] = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
 
-% Plot reference frames of ith scene
+% Plot reference frames of ith scene (normal camera quaternion)
 objSceneArray = gobjects(length(ui32SceneIDs), 1);
 
 for ui32SceneID = ui32SceneIDs
 
     % Convert DCMs to quaternion
     dSceneEntityQuatArray_RenderFrameFromTF = dcm2quat(dBodiesAttDCM_Buffer_NavFrameFromTF(:,:, ui32SceneID))';
-    dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID))';
-
+    dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32SceneID))';
 
     % Construct figure with plot
     [objSceneArray(ui32SceneID)] = PlotSceneFrames_Quat(dBodiesOrigin_Buffer_NavFrame(:, ui32SceneID), ...
         dSceneEntityQuatArray_RenderFrameFromTF, ...
         dCameraOrigin_Buffer_NavFrame(:, ui32SceneID), ...
-        dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true);
+        dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true, ...
+        "charFigTitle", "Visualization with normal camera quaternion");
 
 end
+
+% Plot reference frames of ith scene (inverted "Blender" camera quaternion)
+% objSceneArray_2 = gobjects(length(ui32SceneIDs), 1);
+% 
+% for ui32SceneID = ui32SceneIDs
+% 
+%     % Convert DCMs to quaternion
+%     dSceneEntityQuatArray_RenderFrameFromTF = dcm2quat(dBodiesAttDCM_Buffer_NavFrameFromTF(:,:, ui32SceneID))';
+%     dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32SceneID))';
+% 
+%     dCameraQuat_RenderFrameFromCam = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(dCameraQuat_RenderFrameFromCam);
+% 
+%     % Construct figure with plot
+%     [objSceneArray_2(ui32SceneID)] = PlotSceneFrames_Quat(dBodiesOrigin_Buffer_NavFrame(:, ui32SceneID), ...
+%                                                             dSceneEntityQuatArray_RenderFrameFromTF, ...
+%                                                             dCameraOrigin_Buffer_NavFrame(:, ui32SceneID), ...
+%                                                             dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true, ...
+%                                                             "charFigTitle", "Visualization with Blender camera quaternion");
+% 
+% end
+
 
 % Test renderImage method
 ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
