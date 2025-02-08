@@ -130,6 +130,7 @@ objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort
 delete(objBlenderPyCommManager)
 return
 %% BlenderPyCommManager_renderImageFromPQ_
+clear objBlenderPyCommManager
 
 % Instance definition with automatic management of server
 objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
@@ -139,23 +140,60 @@ objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i64RecvTCPsize);
 
 % Compose scene data stuct 
-dSceneDataVector = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
+dSceneDataVector_ref = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
 
 % Test renderImageFromPQ_ method
 bApplyBayerFilter = true;
 bIsImageRGB = true;
-dImg = objBlenderPyCommManager.renderImageFromPQ_(dSceneDataVector, ...
+dImg = objBlenderPyCommManager.renderImageFromPQ_(dSceneDataVector_ref, ...
     "bApplyBayerFilter", bApplyBayerFilter, "bIsImageRGB", bIsImageRGB); 
 
 
 % TODO: fix issue in reception. The issue is that ReadBuffer assumes the sender specifies 4 bytes for the
 % message length first, but it is not the case here. --> add length as input to Read buffer, that if not 0
 % makes the class avoid the reading of the first 4 bytes.
-
+figure('WindowState', 'normal')
 imshow(dImg);
 pause(1);
+clear objBlenderPyCommManager
+return
+
+%% BlenderPyCommManager_composeSceneDataVector
+clear objBlenderPyCommManager_test
+
+% Instance definition with automatic management of server
+objBlenderPyCommManager_test = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', false, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i64RecvTCPsize);
+
+% Compose reference scene data stuct 
+dSceneDataVector_ref = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
+
+% Assign data
+% Nav frame is CAMERA frame
+% Convert Blender quaternions to DCM for testing
+dSunVector_NavFrame             = dSunPos;
+dCameraOrigin_NavFrame          = dSCPos;
+dCameraAttDCM_NavframeFromTF    = quat2dcm(dSCquat);
+dBodiesOrigin_NavFrame          = dBody1Pos;
+dBodiesAttDCM_NavFrameFromTF    = quat2dcm(dBody1Quat);
+
+dSceneDataVector_ref = objBlenderPyCommManager_test.composeSceneDataVector(dSunVector_NavFrame', ...
+    dCameraOrigin_NavFrame', ...
+    dCameraAttDCM_NavframeFromTF, ...
+    dBodiesOrigin_NavFrame', ...
+    dBodiesAttDCM_NavFrameFromTF, ...
+    "enumRenderingFrame", EnumRenderingFrame.CAMERA);
+
+assert(all((dSceneDataVector_ref - dSceneDataVector_ref) < 2*eps, 'all') )
+
+clear objBlenderPyCommManager_test
+return
 
 %% BlenderPyCommManager_renderImage
+clear objBlenderPyCommManager
 
 % Instance definition with automatic management of server
 objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
@@ -180,20 +218,29 @@ dImg = objBlenderPyCommManager.renderImage(dSunVector_NavFrame, ...
                                         dCameraAttDCM_NavframeFromTF, ...
                                         dBodiesOrigin_NavFrame', ...
                                         dBodiesAttDCM_NavFrameFromTF, ...
-                                        "enumRenderingFrame", EnumRenderingFrame.CAMERA);
+                                        "enumRenderingFrame", EnumRenderingFrame.CAMERA, ...
+                                        'bConvertCamQuatToBlenderQuat', false);
 
-imshow(dImg);
 pause(1);
+
+dSceneDataVector_ref = [dSunPos, dSunQuat, dSCPos, dSCquat, dBody1Pos, dBody1Quat];%, dBody2Pos, dBody2Quat];
+
+% Check assert
+bApplyBayerFilter = true;
+bIsImageRGB = true;
+dImg_check = objBlenderPyCommManager.renderImageFromPQ_(dSceneDataVector_ref, ...
+    "bApplyBayerFilter", bApplyBayerFilter, "bIsImageRGB", bIsImageRGB); 
+
+figure('WindowState', 'normal')
+imshow(dImg);
+figure('WindowState', 'normal')
+imshow(dImg_check);
+pause(2);
 
 
 % Delete instance and terminate server
-delete(objBlenderPyCommManager)
+clear objBlenderPyCommManager
 return
-
-%% BlenderPyCommManager_renderImage_Itokawa
-% SUN:   POS [-2.18005798e+11  8.93741503e+09  5.85809786e+09] - Q [ 0.68231001  0.18561531 -0.67240421 -0.21879803]
-% SC:    POS [1594.63312307 -823.53098889 -815.84840801] - Q [0.83350509 0.18311617 0.50946444 0.11037991]
-% BODY (0):   POS: [0. 0. 0.] - Q [-4.04115385e-03  9.89996486e-01 -1.41033289e-01  4.87484429e-04]
 
 
 %% BlenderPyCommManager_renderImageSequence_Itokawa
@@ -205,22 +252,23 @@ addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, ne
 run('loadSimulationSetup');
 
 % Overwrite model definition if needed
-% charBlenderModelPath       = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
+% charBlenderModelPath2       = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
 % charBlenderModelPath       = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
 charBlenderPyInterfacePath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py";
 
-objCamera.ui32NumOfChannels = 4;
+% objCamera.ui32NumOfChannels = 4; % Camera loaded from yaml file
+
 dCommTimeout = 60;
 % Instance definition with automatic management of server
 objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
-    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, ...
-    "objCameraIntrisincs", objCamera);
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10);%, ...
+    %"objCameraIntrisincs", objCamera);
 
 % Define scene 
-ui32NumOfImgs = 2;% length(strScenConfig.dTimestamps)
+ui32NumOfImgs = 1;% length(strScenConfig.dTimestamps)
 ui32SceneIDs = [1,2];
 
 % Nav frame is TARGET BODY frame
@@ -255,22 +303,22 @@ end
 [dSunAttQuat_Buffer_NavframeFromTF, dSunAttDCM_Buffer_NavframeFromTF] = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
 
 % Plot reference frames of ith scene (normal camera quaternion)
-objSceneArray = gobjects(length(ui32SceneIDs), 1);
+% objSceneArray = gobjects(length(ui32SceneIDs), 1);
 
-for ui32SceneID = ui32SceneIDs
-
-    % Convert DCMs to quaternion
-    dSceneEntityQuatArray_RenderFrameFromTF = dcm2quat(dBodiesAttDCM_Buffer_NavFrameFromTF(:,:, ui32SceneID))';
-    dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32SceneID))';
-
-    % Construct figure with plot
-    [objSceneArray(ui32SceneID)] = PlotSceneFrames_Quat(dBodiesOrigin_Buffer_NavFrame(:, ui32SceneID), ...
-        dSceneEntityQuatArray_RenderFrameFromTF, ...
-        dCameraOrigin_Buffer_NavFrame(:, ui32SceneID), ...
-        dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true, ...
-        "charFigTitle", "Visualization with normal camera quaternion");
-
-end
+% for ui32SceneID = ui32SceneIDs
+% 
+%     % Convert DCMs to quaternion
+%     dSceneEntityQuatArray_RenderFrameFromTF = dcm2quat(dBodiesAttDCM_Buffer_NavFrameFromTF(:,:, ui32SceneID))';
+%     dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32SceneID))';
+% 
+%     % Construct figure with plot
+%     [objSceneArray(ui32SceneID)] = PlotSceneFrames_Quat(dBodiesOrigin_Buffer_NavFrame(:, ui32SceneID), ...
+%         dSceneEntityQuatArray_RenderFrameFromTF, ...
+%         dCameraOrigin_Buffer_NavFrame(:, ui32SceneID), ...
+%         dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true, ...
+%         "charFigTitle", "Visualization with normal camera quaternion");
+% 
+% end
 
 % Plot reference frames of ith scene (inverted "Blender" camera quaternion)
 % objSceneArray_2 = gobjects(length(ui32SceneIDs), 1);
@@ -292,20 +340,23 @@ end
 % 
 % end
 
-
 % Test renderImage method
+bConvertCamQuatToBlenderQuat = true;
+bEnableFramesPlot = true;
 ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
                                                  dCameraOrigin_Buffer_NavFrame, ...
                                                  dCameraAttDCM_Buffer_NavframeFromTF, ...
                                                  dBodiesOrigin_Buffer_NavFrame, ...
                                                  dBodiesAttDCM_Buffer_NavFrameFromTF, ...
-                                                 "charOutputDatatype", "uint8");
+                                                 "charOutputDatatype", "double", ...
+                                                 "bEnableFramesPlot", bEnableFramesPlot, ...
+                                                 "bConvertCamQuatToBlenderQuat", bConvertCamQuatToBlenderQuat);
 
 figure
 imshow(ui8OutImgArrays(:,:,1))
 
-figure;
-imshow(ui8OutImgArrays(:,:,2))
+% figure;
+% imshow(ui8OutImgArrays(:,:,2))
 
 
 
