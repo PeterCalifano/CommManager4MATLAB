@@ -290,13 +290,15 @@ dCommTimeout = 120;
 % Instance definition with automatic management of server
 objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
+    'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, "bSendLogToShellPipe", true);%, ...
     %"objCameraIntrisincs", objCamera);
 
 % Define scene 
-ui32NumOfImgs = 1; %length(strScenConfig.dTimestamps);
+ui32TimestampsGrid = round(linspace(1, length(strScenConfig.dTimestamps), 200));
+
+ui32NumOfImgs = length(ui32TimestampsGrid); %length(strScenConfig.dTimestamps);
 
 % Nav frame is TARGET BODY frame
 % Convert Blender quaternions to DCM for testing
@@ -308,27 +310,29 @@ dBodiesOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
 dBodiesAttDCM_Buffer_NavFrameFromTF    = zeros(3, 3, ui32NumOfImgs);
 
 % Construct scene buffers
-for ui32TimestampID = 1:ui32NumOfImgs
+for ui32PtrToTimeID = 1:ui32NumOfImgs
+
+    ui32TimestampID = ui32TimestampsGrid(ui32PtrToTimeID);
 
     % NOTE: Nav frame is CUSTOM_FRAME if IN frame, TARGET_BODY if TB
-    dSunDirGT_TB = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
-    dSunVector_Buffer_NavFrame(:, ui32TimestampID)               = strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID)/1000;
+    dSunDirGT_TB = strMainBodyRefData.dDCM_INfromTB(:,:, ui32PtrToTimeID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
+    dSunVector_Buffer_NavFrame(:, ui32PtrToTimeID)               = strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID)/1000;
 
-    dCameraOrigin_Buffer_NavFrame(:, ui32TimestampID)            = 3*strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/norm(strReferenceData.dxSCref_IN(1:3, ui32TimestampID));
+    dCameraOrigin_Buffer_NavFrame(:, ui32PtrToTimeID)            = 3*strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/norm(strReferenceData.dxSCref_IN(1:3, ui32TimestampID));
     % dCameraOrigin_Buffer_NavFrame(:, ui32TimestampID)           = strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/1000;
     
     % Use attitude generator
     % objPointingGenerator = CAttitudePointingGenerator(strReferenceData.dxSCref_IN(1:3, ui32TimestampID), [0;0;0]);
     % [objPointingGenerator, dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)]   = objPointingGenerator.pointToTarget_PositionOnly();
 
-    dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)   = strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID);
+    dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32PtrToTimeID)   = strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID);
 
     % dCameraAttDCM_Buffer_NavframeFromTF(:, :, ui32TimestampID)   = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * ...
     %                                                                 strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID);
 
-    dBodiesOrigin_Buffer_NavFrame(:, ui32TimestampID)            = zeros(3,1);
+    dBodiesOrigin_Buffer_NavFrame(:, ui32PtrToTimeID)            = zeros(3,1);
     % dBodiesAttDCM_Buffer_NavFrameFromTF(:, :, ui32TimestampID)   = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID);
-    dBodiesAttDCM_Buffer_NavFrameFromTF(:, :, ui32TimestampID)   = eye(3);
+    dBodiesAttDCM_Buffer_NavFrameFromTF(:, :, ui32PtrToTimeID)   = eye(3);
 
 end
 
@@ -384,10 +388,16 @@ ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_
                                                  "charOutputDatatype", "double", ...
                                                  "bEnableFramesPlot", bEnableFramesPlot, ...
                                                  "bConvertCamQuatToBlenderQuat", bConvertCamQuatToBlenderQuat, ...
-                                                 "enumRenderingFrame", EnumRenderingFrame.CUSTOM_FRAME);
+                                                 "enumRenderingFrame", EnumRenderingFrame.CUSTOM_FRAME, ...
+                                                 "bDisplayImage", true);
 
-figure
-imshow(ui8OutImgArrays(:,:,1))
+% for id = 1:size(ui8OutImgArrays, 3)
+%     figure(1)
+% 
+%     imshow(ui8OutImgArrays(:,:,id))
+%     pause(1);
+% end
+
 
 % figure;
 % imshow(ui8OutImgArrays(:,:,2))

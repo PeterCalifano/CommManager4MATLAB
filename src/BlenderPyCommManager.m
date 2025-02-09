@@ -357,6 +357,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
                 kwargs.bEnableFramesPlot               (1,1) logical {islogical} = false;
                 kwargs.bConvertCamQuatToBlenderQuat    (1,1) logical {isscalar, islogical} = true;
+                kwargs.bDisplayImage                   (1,1) logical {islogical} = false;
             end
                 
             % Determine number of images from camera origin array
@@ -497,6 +498,14 @@ classdef BlenderPyCommManager < CommManager
                 % Store image into output array
                 outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), idImg) = cast(dImg, kwargs.charOutputDatatype);
                 fprintf("Completed image %d of %d.\n", idImg, ui32NumOfImages)
+
+                if kwargs.bDisplayImage
+                    figure(95)
+                    clf;
+                    imshow( outImgArrays(:,:,idImg) )
+                    axis image
+                end
+
 
                 % Get labels data
                 % TODO (PC) next upgrade, transmit through TCP? TBD
@@ -912,12 +921,12 @@ classdef BlenderPyCommManager < CommManager
         end
         
         % Compose scene data vector PQ 
-        function [dSceneDataVector] = composeSceneDataVector(dSunVector_NavFrame, ...
-                dCameraOrigin_NavFrame, ...
-                dCameraAttDCM_NavframeFromOF, ...
-                dBodiesOrigin_NavFrame, ...
-                dBodiesAttDCM_NavFrameFromOF, ...
-                kwargs)
+        function [dSceneDataVector] = composeSceneDataVector( dSunVector_NavFrame, ...
+                                                              dCameraOrigin_NavFrame, ...
+                                                              dCameraAttDCM_NavframeFromOF, ...
+                                                              dBodiesOrigin_NavFrame, ...
+                                                              dBodiesAttDCM_NavFrameFromOF, ...
+                                                              kwargs)
             arguments
                 dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
                 dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
@@ -976,7 +985,10 @@ classdef BlenderPyCommManager < CommManager
                 % DEVNOTE: the quaternion corresponding to the matrix NavFrameFromTF must be first
                 % transposed to be the one required by Blender due to the convention for its/my definition
                 % of rotation matrices.
-                dBodiesQuaternion_OFfromNavFrame(:, idB) = quatinv( transpose( DCM2quat(dBodiesAttDCM_NavFrameFromOF, false) ) );
+                % TODO: which is the correct way?
+                % dBodiesQuaternion_OFfromNavFrame(:, idB) = quatinv( transpose( DCM2quat(dBodiesAttDCM_NavFrameFromOF, false) ) );
+                dBodiesQuaternion_OFfromNavFrame(:, idB) = ( transpose( DCM2quat(dBodiesAttDCM_NavFrameFromOF, false) ) );
+
             end
 
             % Compose output vector
