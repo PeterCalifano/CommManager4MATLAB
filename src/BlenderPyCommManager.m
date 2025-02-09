@@ -458,7 +458,9 @@ classdef BlenderPyCommManager < CommManager
                             dSceneEntityQuatArray_RenderFrameFromTF = dcm2quat(dBodiesAttDCM_NavFrameFromTF)';
                             dCameraQuat_RenderFrameFromCam          = dcm2quat(dCameraAttDCM_NavframeFromTF)';
 
-                            dCameraQuat_RenderFrameFromCam = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(dCameraQuat_RenderFrameFromCam);
+                            if kwargs.bConvertCamQuatToBlenderQuat
+                                dCameraQuat_RenderFrameFromCam = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(dCameraQuat_RenderFrameFromCam);
+                            end
 
                             % Construct figure with plot
                             [objSceneFigs(idImg)] = PlotSceneFrames_Quat(dBodiesOrigin_NavFrame, ...

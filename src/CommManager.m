@@ -51,6 +51,7 @@ classdef CommManager < handle
     
     properties (SetAccess = protected, GetAccess = public)
         % CONFIGURATION data members
+        bDefaultConstructed     logical = true;
         charConfigYamlFilename = ""
         strConfigFromYaml       {isstruct} = struct()
 
@@ -89,8 +90,8 @@ classdef CommManager < handle
         % CONSTRUCTOR
         function self = CommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
-                charServerAddress (1,:) string          {ischar, isstring}  
-                ui32ServerPort    (1,:) uint32          {isvector, isnumeric} 
+                charServerAddress (1,:) string          {ischar, isstring}    = ""
+                ui32ServerPort    (1,:) uint32          {isvector, isnumeric} = 0
                 dCommTimeout      (1,1) double          {isscalar, isnumeric} = 20     
             end
             
@@ -112,6 +113,10 @@ classdef CommManager < handle
             self.charServerAddress  = charServerAddress;
             self.ui32ServerPort     = ui32ServerPort;
             self.dCommTimeout       = dCommTimeout;
+
+            if strcmpi(self.charServerAddress, "") && self.ui32ServerPort > 0
+                self.bDefaultConstructed = false;
+            end
 
             % Targets for UDP
             self.charTargetAddress  = kwargs.charTargetAddress;
@@ -447,7 +452,7 @@ classdef CommManager < handle
         % DEVNOTE: may be implemented by overloading/overriding the subsref method such that it gets called
         % at each dot indexing (properties included) automatically.
         function assertInit(self)
-            assert(self.bCommManagerReady == true, 'Instance not initialized correctly. You need to establish connection before use! Call instance.Initialize() or pass flag bInitInPlace as true.')
+            assert(self.bCommManagerReady == true && not(self.bDefaultConstructed), 'Instance not initialized correctly. You need to establish connection before use! Call instance.Initialize() or pass flag bInitInPlace as true.')
         end
 
         function bIsValid = isValidDataStruct(objdataStructToWrite)
