@@ -229,8 +229,8 @@ classdef BlenderPyCommManager < CommManager
                 dSensor_size_y = 1536; 
                 ui32NumOfChannels = uint32(4); % RGBA
 
-                dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
-                ui32ImageSize = [dSensor_size_x, dSensor_size_y];
+                ui32ImageSize = [dSensor_size_x; dSensor_size_y];
+                dFocalLength_uv = CCameraIntrinsics.computeFocalLenghInPix([dFOV_x; dFOV_y], ui32ImageSize, "deg");
                 dPrincipalPoint = double(ui32ImageSize)/2;
 
                 self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv, dPrincipalPoint, ui32ImageSize, ui32NumOfChannels);
@@ -266,7 +266,7 @@ classdef BlenderPyCommManager < CommManager
             end
 
             % If connection in place, try to connect to server
-            if bIsValidServerAutoManegementConfig && bInitInPlace == false
+            if bIsValidServerAutoManegementConfig && bInitInPlace == false && kwargs.bInitInPlace == true
                 self.Initialize(); % TODO check this call is ok
             end
 

@@ -292,7 +292,7 @@ dCommTimeout = 120;
 % Instance definition with automatic management of server
 objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
-    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
+    'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
     'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, "bSendLogToShellPipe", true);%, ...
     %"objCameraIntrisincs", objCamera);
@@ -311,6 +311,7 @@ dCameraAttDCM_Buffer_NavframeFromOF    = zeros(3, 3, ui32NumOfImgs);
 dBodiesOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
 dBodiesAttDCM_Buffer_NavFrameFromOF    = zeros(3, 3, ui32NumOfImgs);
 
+
 % Construct scene buffers
 for ui32PtrToTimeID = 1:ui32NumOfImgs
 
@@ -318,12 +319,12 @@ for ui32PtrToTimeID = 1:ui32NumOfImgs
 
     % NOTE: Nav frame is CUSTOM_FRAME if IN frame, TARGET_BODY if TB
     % dSunDirGT_TB = strMa6inBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
-    dSunVector_Buffer_NavFrame(:, ui32PtrToTimeID)               = strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID)/1000;
+    % dSunVector_Buffer_NavFrame(:, ui32PtrToTimeID)               = strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID)/1000;
     % dSunVector_Buffer_NavFrame(:, ui32PtrToTimeID)               = dSunDirGT_TB/1000;
 
     dCameraOrigin_Buffer_NavFrame(:, ui32PtrToTimeID)            = 3*strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/norm(strReferenceData.dxSCref_IN(1:3, ui32TimestampID));
     % dCameraOrigin_Buffer_NavFrame(:, ui32TimestampID)           = strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/1000;
-    
+
     % Use attitude generator
     % objPointingGenerator = CAttitudePointingGenerator(strReferenceData.dxSCref_IN(1:3, ui32TimestampID), [0;0;0]);
     % [objPointingGenerator, dCameraAttDCM_Buffer_NavframeFromOF(:, :, ui32TimestampID)]   = objPointingGenerator.pointToTarget_PositionOnly();
@@ -338,6 +339,11 @@ for ui32PtrToTimeID = 1:ui32NumOfImgs
     dBodiesAttDCM_Buffer_NavFrameFromOF(:, :, ui32PtrToTimeID)   = eye(3);
 
 end
+
+% Get camera position at half of the sequence (the lazy way)
+dCameraOrigin_SunRef_NavFrame = dCameraOrigin_Buffer_NavFrame(:, round(ui32NumOfImgs/2));
+dSunVector_Buffer_NavFrame = 1000 * repmat(dCameraOrigin_SunRef_NavFrame, 1, size(dSunVector_Buffer_NavFrame, 2));
+
 
 % Test computation of Sun direction in batch (static method)
 [dSunAttQuat_Buffer_NavframeFromOF, dSunAttDCM_Buffer_NavframeFromOF] = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
