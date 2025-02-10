@@ -972,11 +972,11 @@ classdef BlenderPyCommManager < CommManager
 
                 % Transpose DCM to adjust to Blender rotation definition of DCM (TBC) and transform to Quat
                 dCameraBlendQuaternion_OFfromNavFrame = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(...
-                    DCM2quat( dCameraAttDCM_NavframeFromOF , false) );
+                    DCM2quat( transpose( dCameraAttDCM_NavframeFromOF ) , false) );
             
             else
-
-                dCameraBlendQuaternion_OFfromNavFrame = DCM2quat(dCameraAttDCM_NavframeFromOF, false);
+                % DEVNOTE: ACHTUNG: Blender require attitude matrix to be defined from NavFrame TO OF!
+                dCameraBlendQuaternion_OFfromNavFrame = DCM2quat(transpose(dCameraAttDCM_NavframeFromOF), false);
             end
             
             dBodiesQuaternion_OFfromNavFrame = zeros(4, ui32NumOfBodies);
@@ -985,9 +985,7 @@ classdef BlenderPyCommManager < CommManager
                 % DEVNOTE: the quaternion corresponding to the matrix NavFrameFromTF must be first
                 % transposed to be the one required by Blender due to the convention for its/my definition
                 % of rotation matrices.
-                % TODO: which is the correct way?
-                % dBodiesQuaternion_OFfromNavFrame(:, idB) = quatinv( transpose( DCM2quat(dBodiesAttDCM_NavFrameFromOF, false) ) );
-                dBodiesQuaternion_OFfromNavFrame(:, idB) = ( transpose( DCM2quat(dBodiesAttDCM_NavFrameFromOF, false) ) );
+                dBodiesQuaternion_OFfromNavFrame(:, idB) = transpose( DCM2quat(transpose( dBodiesAttDCM_NavFrameFromOF ) , false) ) ;
 
             end
 
@@ -1109,7 +1107,8 @@ classdef BlenderPyCommManager < CommManager
             for idQ = 1:size(dCameraQuaternionArray, 2)
                 % DEVNOTE: the quaternion corresponding to the matrix NavFrameFromTF must be first
                 % transposed to be the one required by Blender due to the convention for its definition.
-                dCameraBlendQuatArray(1:4, idQ) = quatmultiply(quatinv(dCameraQuaternionArray(1:4,idQ)'), [0,1,0,0]);
+                % In fact, Blender requires the quaternion from World frame to Object frame!
+                dCameraBlendQuatArray(1:4, idQ) = quatmultiply( dCameraQuaternionArray(1:4,idQ)' , [0,1,0,0]);
             end
         end
 
@@ -1158,33 +1157,41 @@ classdef BlenderPyCommManager < CommManager
 
     methods (Static, Access = public)
 
-        function [dSunBlenderQuatArray, dSunDCMarray] = computeSunBlenderQuatFromPosition(dSunPositionArray_NavFrame)
+        function [dSunBlenderQuat_OFfromNavFrame, dSunDCM_OFfromNavFrame] = computeSunBlenderQuatFromPosition(dSunPositionArray_NavFrame)
             arguments
                 dSunPositionArray_NavFrame (3,:) double {isvector, isnumeric}
             end
             % Function to construct quaternion determining Sun direction as required by Blender, from position
-            
+            % NOTE: quaternion must be the one corresponding to the DCM from NavFrame (World) to "Sun frame"
+
             ui32NumOfQuats = size(dSunPositionArray_NavFrame, 2);
-            dSunBlenderQuatArray = zeros(4, ui32NumOfQuats);
-            dSunDCMarray = zeros(3, 3, ui32NumOfQuats);
+            dSunBlenderQuat_OFfromNavFrame = zeros(4, ui32NumOfQuats);
+            dSunDCM_OFfromNavFrame = zeros(3, 3, ui32NumOfQuats);
 
             % Compute unit direction
             dUnitVectorToSunArray = dSunPositionArray_NavFrame./vecnorm(dSunPositionArray_NavFrame, 2, 1);
         
-            % Compute Z axis
-            dZaxisArray = dUnitVectorToSunArray;
-            dAuxVectorArray =  repmat([1; 0; 0], 1, ui32NumOfQuats);
+            % Compute Z axis in NavFrame
+            dZaxisArray_NavFrame = dUnitVectorToSunArray;
+            dAuxVectorArray_NavFrame =  repmat([1; 0; 0], 1, ui32NumOfQuats); % Auxiliary vector, can be arbitrary not aligned
             
-            % Compute X axis
-            dXaxisArray = cross(dAuxVectorArray, dZaxisArray) ./ vecnorm(cross(dAuxVectorArray, dZaxisArray), 2, 1);
-            
-            % Compute Y axis
-            dYaxisArray = cross(dZaxisArray, dXaxisArray);
+            % Compute X axis in NavFrame
+            dXaxisArray_NavFrame = cross(dAuxVectorArray_NavFrame, dZaxisArray_NavFrame);
+            dXaxisArray_NavFrame = dXaxisArray_NavFrame ./ vecnorm(dXaxisArray_NavFrame, 2, 1);
+
+            % Compute Y axis in NavFrame
+            dYaxisArray_NavFrame = cross(dZaxisArray_NavFrame, dXaxisArray_NavFrame);
 
             for idR = 1:ui32NumOfQuats
-                % DEVNOTE: taken from Milani/RCS1 NavCam
-                dSunDCMarray(:,:, idR) = transpose([dXaxisArray(:,idR)'; dYaxisArray(:,idR)'; dZaxisArray(:,idR)']); 
-                dSunBlenderQuatArray(1:4, idR) = rotm2quat(dSunDCMarray(:,:, idR));
+
+                % Construct DCM ( TODO: validate matrix)
+                % NOTE: matrix has axes of OF frame expressed in NavFrame as rows, such that dot product
+                % on each project a vector from NavFrame basis to OF basis.
+                dSunDCM_OFfromNavFrame(:,:, idR) = [dXaxisArray_NavFrame(:,idR)'; dYaxisArray_NavFrame(:,idR)'; dZaxisArray_NavFrame(:,idR)']; 
+
+                % Convert to quaternion
+                dSunBlenderQuat_OFfromNavFrame(1:4, idR) = DCM2quat( dSunDCM_OFfromNavFrame(:,:, idR), false); 
+
             end
 
 
