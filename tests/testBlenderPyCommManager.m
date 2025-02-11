@@ -32,10 +32,10 @@ cleanup = onCleanup(@() clear);
 charScriptName              = 'CORTO_UDP_TCP_interface.py'; 
 
 % charBlenderModelPath    = '/home/peterc/devDir/rendering-sw/corto_PeterCdev/input/OLD_ones_0.1/S5_Didymos_Milani/S5_Didymos_Milani.blend';
-charBlenderModelPath                = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
-charBlenderPyInterfacePath            = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/";
-charBlenderPyInterfacePath            = strcat(charBlenderPyInterfacePath, charScriptName);
-charStartBlenderServerScriptPath    = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/StartBlenderServer.sh";
+charBlenderModelPath                 = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
+charBlenderPyInterfacePath           = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/";
+charBlenderPyInterfacePath           = strcat(charBlenderPyInterfacePath, charScriptName);
+charStartBlenderServerScriptPath     = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator/lib/corto_PeterCdev/server_api/StartBlenderServer.sh";
 
 charServerAddress = 'localhost';
 ui32ServerPort = [30001, 51000]; % [TCP, UDP]
@@ -282,20 +282,33 @@ addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, ne
 run('loadSimulationSetup');
 
 % Overwrite model definition if needed
-% charBlenderModelPath       = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
-charBlenderModelPath       = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/data/scenarios/S2_Itokawa/S2_Itokawa.blend";
-charBlenderPyInterfacePath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py";
+bUseRCS1 = true;
+
+if bUseRCS1 == true
+    charRootPath = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator";
+    charDataPath = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
+    charBlenderPyInterfacePath          = fullfile(charRootPath, "lib/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py" );
+    charStartBlenderServerScriptPath    = fullfile(charRootPath, "lib/corto_PeterCdev/server_api/StartBlenderServer.sh");
+else
+    charRootPath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev";
+    charBlenderModelPath        = fullfile(charRootPath, "data/scenarios/S2_Itokawa/S2_Itokawa.blend");
+    charBlenderPyInterfacePath  = fullfile(charRootPath, "server_api/BlenderPy_UDP_TCP_interface.py" );
+    charStartBlenderServerScriptPath    = fullfile(charRootPath, "server_api/StartBlenderServer.sh");
+end
+
+charInterfaceRootPath  = fileparts(charBlenderPyInterfacePath);
+charConfigYamlPath     = fullfile(charInterfaceRootPath, "BlenderPy_UDP_TCP_CONFIG.yml");
 
 % objCamera.ui32NumOfChannels = 4; % Camera loaded from yaml file
 
 dCommTimeout = 120;
-% Instance definition with automatic management of server
+% Instance definition with automatic management of server (uses camera parsed from yaml)
 objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
-    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, "bSendLogToShellPipe", true);%, ...
-    %"objCameraIntrisincs", objCamera);
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, "bSendLogToShellPipe", true, ...
+    "charConfigYamlFilename", charConfigYamlPath);
 
 % Define scene 
 ui32TimestampsGrid = round(linspace(1, length(strScenConfig.dTimestamps), 200));

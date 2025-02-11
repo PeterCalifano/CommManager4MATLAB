@@ -160,7 +160,7 @@ classdef BlenderPyCommManager < CommManager
                 end
 
             elseif not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                self.enumCommDataType = upper(self.strConfigFromYaml.image_dtype);
+                self.enumCommDataType = EnumCommDataType.(upper(self.strConfigFromYaml.Server_params.image_dtype));
             end
 
             if self.i64RecvTCPsize == -10
@@ -203,17 +203,17 @@ classdef BlenderPyCommManager < CommManager
                 % Get params from file
 
                 % Construct camera intrinsics object and assign
-                dFOV_x              = self.strConfigFromYaml.Camera_Params.FOV_x; % [deg] Horizontal Field of View
-                dFOV_y              = self.strConfigFromYaml.Camera_Params.FOV_Y; % [deg] Vertical Field of View
-                dSensor_size_x      = self.strConfigFromYaml.Camera_Params.sensor_size_x; % [px] Horizontal resolution
-                dSensor_size_y      = self.strConfigFromYaml.Camera_Params.sensor_size_y; % [px] Vertical resolution
-                ui32NumOfChannels   = self.strConfigFromYaml.Camera_Params.n_channels;
+                dFOV_x              = self.strConfigFromYaml.Camera_params.FOV_x; % [deg] Horizontal Field of View
+                dFOV_y              = self.strConfigFromYaml.Camera_params.FOV_y; % [deg] Vertical Field of View
+                dSensor_size_x      = self.strConfigFromYaml.Camera_params.sensor_size_x; % [px] Horizontal resolution
+                dSensor_size_y      = self.strConfigFromYaml.Camera_params.sensor_size_y; % [px] Vertical resolution
+                ui32NumOfChannels   = self.strConfigFromYaml.Camera_params.n_channels;
 
                 dPrincipalPoint_uv = [dSensor_size_x, dSensor_size_y]./2;
             
                 % TODO: add assert on rounding! Must be integer
 
-                % self.ui32NumOfChannels = self.strConfigFromYaml.Camera_Params.n_channels;
+                % self.ui32NumOfChannels = self.strConfigFromYaml.Camera_params.n_channels;
                 dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
 
                 % Construct camera intrinsics object
@@ -223,8 +223,8 @@ classdef BlenderPyCommManager < CommManager
                 % Assume Milani/RCS-1 NavCam parameters
                 warning('No camera object nor yaml configuration file specified. Assuming Milani NavCam parameters.')
 
-                dFOV_x = 21; % [deg]
-                dFOV_y = 16;
+                dFOV_x = 19.72; % [deg]
+                dFOV_y = 14.86;
                 dSensor_size_x = 2048; % [px]
                 dSensor_size_y = 1536; 
                 ui32NumOfChannels = uint32(4); % RGBA
@@ -367,7 +367,7 @@ classdef BlenderPyCommManager < CommManager
             % Default number of body is 1. Overridden by yaml configuration if any.
             ui32NumOfBodies     = kwargs.ui32NumOfBodies;
             if not(strcmpi(self.charConfigYamlFilename, ""))
-                ui32NumOfBodies = uint32(self.strConfigFromYaml.num_bodies);
+                ui32NumOfBodies = uint32(self.strConfigFromYaml.BlenderModel_params.num_bodies);
             end
 
             if (ui32NumOfBodies == 1 && ui32NumOfImages > 1) || (ui32NumOfImages == 1 && ui32NumOfBodies > 1)
