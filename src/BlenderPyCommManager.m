@@ -1,9 +1,9 @@
 classdef BlenderPyCommManager < CommManager
     %% CONSTRUCTOR
-    %
+    % TODO
     % -------------------------------------------------------------------------------------------------------------
     %% DESCRIPTION
-    %
+    % TODO
     % -------------------------------------------------------------------------------------------------------------
     %% DATA MEMBERS
     % -------------------------------------------------------------------------------------------------------------
@@ -16,10 +16,12 @@ classdef BlenderPyCommManager < CommManager
     % 31-01-2024    Pietro Califano     Implement auto management of Blender server for Linux.
     % 07-02-2025    Pietro Califano     Major update of class to introduce camera object, improve
     %                                   configuration and communication handling. Render methods tested.
+    % 11-02-2025    Pietro Califano     Minor bug fixes, implementation of methods to compute attitude as
+    %                                   required by Blender, extensive testing for release version.
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
-    % Functions and classes in SimulationGears_for_SpaceNav repository. Specifiocally, CCameraIntrinsics.
-    % git@github.com:PeterCalifano/SimulationGears_for_SpaceNav.git
+    % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
+    % See public repo: git@github.com:PeterCalifano/SimulationGears_for_SpaceNav.git
     % -------------------------------------------------------------------------------------------------------------
     %% Future upgrades
     % [-]
@@ -39,11 +41,10 @@ classdef BlenderPyCommManager < CommManager
         charBlenderPyInterfacePath            (1,1) string {mustBeA(charBlenderPyInterfacePath, ["string", "char"])}  
         charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
         
-        % Bytes to image conversion params
-        objCameraIntrinsics = CCameraIntrinsics()
-        % bApplyBayerFilter (1,1) logical {islogical, isscalar} = false;
-        % bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
+        charOutputPath; % Currently read only, this cannot be set from MATLAB
 
+        % Bytes to image conversion params
+        objCameraIntrinsics = CCameraIntrinsics();
         enumCommDataType (1,1) {mustBeA(enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.DOUBLE
 
         % Runtime flags
@@ -148,6 +149,12 @@ classdef BlenderPyCommManager < CommManager
             % Parse yaml configuration file if provided
             if not(strcmpi(kwargs.charConfigYamlFilename, ""))
                 self.parseYamlConfig_(kwargs.charConfigYamlFilename);
+
+                % Set output path by reading it from yaml
+                self.charOutputPath = self.strConfigFromYaml.Server_params.output_path;
+                % TODO: in next version make the class able to rewrite yaml after loading such that
+                % parameters can be updated. In Linux, order of operations (first modify, then start server)
+                % with automatic management can be leveraged to make everything seamless.
             end
 
             % Determine transmission dtype
