@@ -351,7 +351,7 @@ classdef BlenderPyCommManager < CommManager
             end
             arguments (Input)
                 kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
-                kwargs.charOutputDatatype              (1,:) string {isa(kwargs.charOutputDatatype, 'string')} = "uint8"
+                kwargs.charOutputDatatype              (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"])} = "uint8"
                 kwargs.ui32NumOfBodies                 (1,1) uint32 {isnumeric, isscalar} = 1
                 kwargs.objCameraIntrinsics             (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
