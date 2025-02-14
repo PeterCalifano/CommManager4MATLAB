@@ -282,6 +282,9 @@ classdef BlenderPyCommManager < CommManager
         % DESTRUCTOR
         function delete(self)
             % If auto management of Blender server, call termination method
+            % TODO modify to kill ONLY the process of the server that was opened!
+            % How to do it is easy: modify the text grep uses to identify processes with the target port
+            % used for UDP send or the TCP listen.
             if self.bIsValidServerAutoManegementConfig && self.bIsServerRunning
                 self.terminateBlenderProcesses();
             end
@@ -350,11 +353,11 @@ classdef BlenderPyCommManager < CommManager
                                                          kwargs)
             arguments (Input)
                 self
-                dSunVector_Buffer_NavFrame              (3,:)   double {isvector, isnumeric}
-                dCameraOrigin_Buffer_NavFrame           (3,:)   double {isvector, isnumeric}
-                dCameraAttDCM_Buffer_NavframeFromOF     (3,3,:) double {ismatrix, isnumeric}
-                dBodiesOrigin_Buffer_NavFrame           (3,:,:)   double {ismatrix, isnumeric} = zeroes(3,1)
-                dBodiesAttDCM_Buffer_NavFrameFromOF     (3,3,:,:) double {ismatrix, isnumeric} = eye(3)
+                dSunVector_Buffer_NavFrame              (3,:)       double {isvector, isnumeric}
+                dCameraOrigin_Buffer_NavFrame           (3,:)       double {isvector, isnumeric}
+                dCameraAttDCM_Buffer_NavframeFromOF     (3,3,:)     double {ismatrix, isnumeric}
+                dBodiesOrigin_Buffer_NavFrame           (3,:,:)     double {ismatrix, isnumeric} = zeroes(3,1)
+                dBodiesAttDCM_Buffer_NavFrameFromOF     (3,3,:,:)   double {ismatrix, isnumeric} = eye(3)
             end
             arguments (Input)
                 kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
