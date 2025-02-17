@@ -114,7 +114,7 @@ classdef CommManager < handle
             self.ui32ServerPort     = ui32ServerPort;
             self.dCommTimeout       = dCommTimeout;
 
-            if not(strcmpi(self.charServerAddress, "")) && self.ui32ServerPort > 0
+            if not(strcmpi(self.charServerAddress, "")) && all(self.ui32ServerPort > 0)
                 self.bDefaultConstructed = false;
             end
 
