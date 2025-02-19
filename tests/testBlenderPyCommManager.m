@@ -324,7 +324,6 @@ dCameraAttDCM_Buffer_NavframeFromOF    = zeros(3, 3, ui32NumOfImgs);
 dBodiesOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
 dBodiesAttDCM_Buffer_NavFrameFromOF    = zeros(3, 3, ui32NumOfImgs);
 
-
 % Construct scene buffers
 for ui32PtrToTimeID = 1:ui32NumOfImgs
 
@@ -382,6 +381,113 @@ ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_
 % figure;
 % imshow(ui8OutImgArrays(:,:,2))
 
+%% BlenderPyCommManager_renderImageSequence_Itokawa_withAutoConversionToTargetFixed_and_caching
+% Test renderImageSequence method with automatic conversion to target body frame + server-api with caching
+clear objBlenderPyCommManager
+close all
+pause(0.2);
+% TODO: load setup for SLAM simulations
+addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
+run('loadSimulationSetup');
 
+% Overwrite model definition if needed
+bUseRCS1 = true;
+
+if bUseRCS1 == true
+    charRootPath = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator";
+    charDataPath = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
+    charBlenderPyInterfacePath          = fullfile(charRootPath, "lib/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py" );
+    charStartBlenderServerScriptPath    = fullfile(charRootPath, "lib/corto_PeterCdev/server_api/StartBlenderServer.sh");
+else
+    charRootPath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev";
+    charBlenderModelPath        = fullfile(charRootPath, "data/scenarios/S2_Itokawa/S2_Itokawa.blend");
+    charBlenderPyInterfacePath  = fullfile(charRootPath, "server_api/BlenderPy_UDP_TCP_interface.py" );
+    charStartBlenderServerScriptPath    = fullfile(charRootPath, "server_api/StartBlenderServer.sh");
+end
+
+charInterfaceRootPath  = fileparts(charBlenderPyInterfacePath);
+charConfigYamlPath     = fullfile(charInterfaceRootPath, "BlenderPy_UDP_TCP_CONFIG.yml");
+
+% objCamera.ui32NumOfChannels = 4; % Camera loaded from yaml file
+
+dCommTimeout = 120;
+% Instance definition with automatic management of server (uses camera parsed from yaml)
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, "bSendLogToShellPipe", true, ...
+    "charConfigYamlFilename", charConfigYamlPath);
+
+% Define scene 
+ui32TimestampsGrid = round(linspace(1, length(strScenConfig.dTimestamps), 200));
+
+ui32NumOfImgs = length(ui32TimestampsGrid); %length(strScenConfig.dTimestamps);
+
+% Nav frame is TARGET BODY frame
+% Convert Blender quaternions to DCM for testing
+dSunVector_Buffer_NavFrame             = zeros(3, ui32NumOfImgs);
+dSunAttDCM_Buffer_NavframeFromOF       = zeros(3,3, ui32NumOfImgs);
+dCameraOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
+dCameraAttDCM_Buffer_NavframeFromOF    = zeros(3, 3, ui32NumOfImgs);
+dBodiesOrigin_Buffer_NavFrame          = zeros(3, ui32NumOfImgs);
+dBodiesAttDCM_Buffer_NavFrameFromOF    = zeros(3, 3, ui32NumOfImgs);
+
+% Construct scene buffers
+for ui32PtrToTimeID = 1:ui32NumOfImgs
+
+    ui32TimestampID = ui32TimestampsGrid(ui32PtrToTimeID);
+
+    % NOTE: Nav frame is CUSTOM_FRAME if IN frame, TARGET_BODY if TB
+    % dSunDirGT_TB = strMa6inBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID);
+    % dSunVector_Buffer_NavFrame(:, ui32PtrToTimeID)               = strMainBodyRefData.dSunPosition_IN(:, ui32TimestampID)/1000;
+    % dSunVector_Buffer_NavFrame(:, ui32PtrToTimeID)               = dSunDirGT_TB/1000;
+
+    dCameraOrigin_Buffer_NavFrame(:, ui32PtrToTimeID)            = 3*strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/norm(strReferenceData.dxSCref_IN(1:3, ui32TimestampID));
+    % dCameraOrigin_Buffer_NavFrame(:, ui32TimestampID)           = strReferenceData.dxSCref_IN(1:3, ui32TimestampID)/1000;
+
+    % Use attitude generator
+    % objPointingGenerator = CAttitudePointingGenerator(strReferenceData.dxSCref_IN(1:3, ui32TimestampID), [0;0;0]);
+    % [objPointingGenerator, dCameraAttDCM_Buffer_NavframeFromOF(:, :, ui32TimestampID)]   = objPointingGenerator.pointToTarget_PositionOnly();
+
+    dCameraAttDCM_Buffer_NavframeFromOF(:, :, ui32PtrToTimeID)   = strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID);
+
+    % dCameraAttDCM_Buffer_NavframeFromOF(:, :, ui32TimestampID)   = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID)' * ...
+    %                                                                 strReferenceData.dDCM_INfromCAM(:, :, ui32TimestampID);
+
+    dBodiesOrigin_Buffer_NavFrame(:, ui32PtrToTimeID)            = zeros(3,1);
+    % dBodiesAttDCM_Buffer_NavFrameFromOF(:, :, ui32TimestampID)   = strMainBodyRefData.dDCM_INfromTB(:,:, ui32TimestampID);
+    dBodiesAttDCM_Buffer_NavFrameFromOF(:, :, ui32PtrToTimeID)   = eye(3);
+
+end
+
+% Get camera position at half of the sequence (the lazy way)
+dCameraOrigin_SunRef_NavFrame = dCameraOrigin_Buffer_NavFrame(:, round(ui32NumOfImgs/2));
+dSunVector_Buffer_NavFrame = 1000 * repmat(dCameraOrigin_SunRef_NavFrame, 1, size(dSunVector_Buffer_NavFrame, 2));
+
+
+% Test computation of Sun direction in batch (static method)
+[dSunAttQuat_Buffer_NavframeFromOF, dSunAttDCM_Buffer_NavframeFromOF] = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_Buffer_NavFrame);
+
+% Test renderImageSequence method
+bConvertCamQuatToBlenderQuat = true;
+bEnableFramesPlot = false;
+bDisplayImage = false;
+
+bConvertCamQuatToBlenderQuat = true;
+bEnableFramesPlot = false;
+bDisplayImage = false;
+
+ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
+                                                 dCameraOrigin_Buffer_NavFrame, ...
+                                                 dCameraAttDCM_Buffer_NavframeFromOF, ...
+                                                 dBodiesOrigin_Buffer_NavFrame, ...
+                                                 dBodiesAttDCM_Buffer_NavFrameFromOF, ...
+                                                 "charOutputDatatype", "double", ...
+                                                 "bEnableFramesPlot", bEnableFramesPlot, ...
+                                                 "bConvertCamQuatToBlenderQuat", bConvertCamQuatToBlenderQuat, ...
+                                                 "enumRenderingFrame", EnumRenderingFrame.CUSTOM_FRAME, ...
+                                                 "bDisplayImage", bDisplayImage, ...
+                                                 "bAutomaticConvertToTargetFixed", true);
 
 

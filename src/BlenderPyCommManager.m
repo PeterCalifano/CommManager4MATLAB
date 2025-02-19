@@ -35,13 +35,14 @@ classdef BlenderPyCommManager < CommManager
         % ui32ServerPort % Get from yaml if specified else from input % Defined in superclass
         
         % Configuration
-        bSendLogToShellPipe                     (1,1) logical {islogical, isscalar} = false % FIXME, not working is true due to system call failure
+        bSendLogToShellPipe                 (1,1) logical {islogical, isscalar} = false % FIXME, not working is true due to system call failure
 
         charBlenderModelPath                (1,1) string {mustBeA(charBlenderModelPath, ["string", "char"])}
-        charBlenderPyInterfacePath            (1,1) string {mustBeA(charBlenderPyInterfacePath, ["string", "char"])}  
+        charBlenderPyInterfacePath          (1,1) string {mustBeA(charBlenderPyInterfacePath, ["string", "char"])}  
         charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
         
         charOutputPath; % Currently read only, this cannot be set from MATLAB
+        bAutomaticConvertToTargetFixed  (1,1) logical {islogical, isscalar} = false;
 
         % Bytes to image conversion params
         objCameraIntrinsics = CCameraIntrinsics();
@@ -78,7 +79,8 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.charBlenderPyInterfacePath       (1,:) string        {mustBeA(kwargs.charBlenderPyInterfacePath , ["string", "char"])} = ""
                 kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
-                kwargs.bSendLogToShellPipe              (1,1) logical  = false;
+                kwargs.bSendLogToShellPipe              (1,1) logical       {islogical, isscalar} = false;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false; 
             end
 
             bIsValidServerAutoManegementConfig = false;
@@ -140,6 +142,8 @@ classdef BlenderPyCommManager < CommManager
             self.bIsValidServerAutoManegementConfig = bIsValidServerAutoManegementConfig;
             self.ui32ServerPort = ui32ServerPort;
             self.bSendLogToShellPipe = kwargs.bSendLogToShellPipe;
+            
+            self.bAutomaticConvertToTargetFixed = kwargs.bAutomaticConvertToTargetFixed;
 
             % Start server if in auto management mode
             if bIsValidServerAutoManegementConfig
@@ -368,6 +372,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.bEnableFramesPlot               (1,1) logical {islogical} = false;
                 kwargs.bConvertCamQuatToBlenderQuat    (1,1) logical {isscalar, islogical} = true;
                 kwargs.bDisplayImage                   (1,1) logical {islogical} = false;
+                kwargs.bAutomaticConvertToTargetFixed  (1,1) logical {islogical} = self.bAutomaticConvertToTargetFixed;
             end
                 
             % Determine number of images from camera origin array
@@ -502,8 +507,8 @@ classdef BlenderPyCommManager < CommManager
                                         dBodiesAttDCM_NavFrameFromOF, ...
                                         "enumRenderingFrame", kwargs.enumRenderingFrame, ...
                                         "ui32TargetPort", kwargs.ui32TargetPort, ...
-                                        "bConvertCamQuatToBlenderQuat", kwargs.bConvertCamQuatToBlenderQuat); % TODO: specify kwargs and how to treat image
-
+                                        "bConvertCamQuatToBlenderQuat", kwargs.bConvertCamQuatToBlenderQuat, ...
+                                        "bAutomaticConvertToTargetFixed", kwargs.bAutomaticConvertToTargetFixed); % TODO: specify kwargs and how to treat image
 
                 % Store image into output array
                 outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), idImg) = cast(dImg, kwargs.charOutputDatatype);
@@ -541,7 +546,8 @@ classdef BlenderPyCommManager < CommManager
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % SINGLE IMAGE RENDERING from "disaggregated" scene data
-        function [dImg, self] = renderImage(self, dSunVector_NavFrame, ...
+        function [dImg, self] = renderImage(self, ...
+                                            dSunVector_NavFrame, ...
                                             dCameraOrigin_NavFrame, ...
                                             dCameraAttDCM_NavframeFromOF, ...
                                             dBodiesOrigin_NavFrame, ...
@@ -556,11 +562,12 @@ classdef BlenderPyCommManager < CommManager
                 dBodiesAttDCM_NavFrameFromOF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
             end
             arguments % kwargs arguments
-                kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.dRenderFrameOrigin              (3,1) double  {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_NavFrameFromRenderFrame    (3,3) double  {ismatrix, isnumeric} = eye(3)
-                kwargs.ui32TargetPort                  (1,1) uint32  {isscalar, isnumeric} = 0
-                kwargs.bConvertCamQuatToBlenderQuat    (1,1) logical {isscalar, islogical} = true;
+                kwargs.enumRenderingFrame               (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.dRenderFrameOrigin               (3,1) double  {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_NavFrameFromRenderFrame     (3,3) double  {ismatrix, isnumeric} = eye(3)
+                kwargs.ui32TargetPort                   (1,1) uint32  {isscalar, isnumeric} = 0
+                kwargs.bConvertCamQuatToBlenderQuat     (1,1) logical {isscalar, islogical} = true;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical {isscalar, islogical} = self.bAutomaticConvertToTargetFixed;  
             end
             
             % Input size and validation checks
@@ -581,7 +588,8 @@ classdef BlenderPyCommManager < CommManager
                 'enumRenderingFrame', kwargs.enumRenderingFrame, ...
                 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, ...
                 'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame, ...
-                'bConvertCamQuatToBlenderQuat', kwargs.bConvertCamQuatToBlenderQuat);
+                'bConvertCamQuatToBlenderQuat', kwargs.bConvertCamQuatToBlenderQuat, ...
+                'bAutomaticConvertToTargetFixed', kwargs.bAutomaticConvertToTargetFixed);
 
             
             % TODO: rework renderImageFromPQ_ to avoid the need for these flags!
@@ -949,6 +957,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.dRenderFrameOrigin              (3,1)    double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
                 kwargs.dDCM_NavFrameFromRenderFrame    (3,3)    double {ismatrix, isnumeric} = eye(3)
                 kwargs.bConvertCamQuatToBlenderQuat    (1,1)    logical {islogical, isscalar} = false;
+                kwargs.bAutomaticConvertToTargetFixed  (1,1)    logical {islogical, isscalar} = false;
             end
             % Method to compose scene data vector (PQ data). Input attitude matrices are the matrices that
             % project a vector A_OF in OF frame onto the basis composing NavFrame reference frame.
@@ -957,6 +966,24 @@ classdef BlenderPyCommManager < CommManager
             ui32NumOfBodies = size(dBodiesOrigin_NavFrame, 2);
             assert(size(dBodiesAttDCM_NavFrameFromOF, 3) == ui32NumOfBodies, 'Unmatched number of bodies in Position and Attitude DCM arrays. Please check input data.');
             
+            if kwargs.bAutomaticConvertToTargetFixed
+                % Automatically convert data to target fixed frame before applying composition
+                % NOTE: NavFrame becomes "target fixed frame" if this options executes. The first body is
+                % assumed as the fixed one.
+
+                [dSunVector_NavFrame, dCameraOrigin_NavFrame, ...
+                dCameraAttDCM_NavframeFromOF, dBodiesOrigin_NavFrame, ...
+                dBodiesAttDCM_NavFrameFromOF] = BlenderPyCommManager.ConvertSceneToBodyFixedFrame(dSunVector_NavFrame, ...
+                                                                                                  dCameraOrigin_NavFrame, ...
+                                                                                                  dCameraAttDCM_NavframeFromOF, ...
+                                                                                                  dBodiesOrigin_NavFrame, ...
+                                                                                                  dBodiesAttDCM_NavFrameFromOF);
+
+                % Override enumRenderingFrame
+                kwargs.enumRenderingFrame = EnumRenderingFrame.TARGET_BODY;
+            end
+
+
             % TODO: based on selected rendering frame, assert identity and origin
             if kwargs.enumRenderingFrame == EnumRenderingFrame.CAMERA
                 fprintf('\n\tUsing CAMERA frame as Rendering frame...\n')
@@ -1166,6 +1193,51 @@ classdef BlenderPyCommManager < CommManager
     
 
     methods (Static, Access = public)
+        
+        function [dSunVector_NavFrame, dCameraOrigin_NavFrame, ...
+                dCameraAttDCM_NavframeFromOF, dBodiesOrigin_NavFrame, ...
+                dBodiesAttDCM_NavFrameFromOF] = ConvertSceneToBodyFixedFrame(dSunVector_NavFrame, ...
+                                                                            dCameraOrigin_NavFrame, ...
+                                                                            dCameraAttDCM_NavframeFromOF, ...
+                                                                            dBodiesOrigin_NavFrame, ...
+                                                                            dBodiesAttDCM_NavFrameFromOF, ...
+                                                                            ui32TargetBodyID)
+            arguments
+                dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
+                dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
+                dCameraAttDCM_NavframeFromOF    (3,3)   double {ismatrix, isnumeric}
+                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric}
+                dBodiesAttDCM_NavFrameFromOF    (3,3,:) double {ismatrix, isnumeric} 
+                ui32TargetBodyID                (1,1) uint32 {isscalar, isnumeric} = 1
+            end
+            
+            assert(size(dBodiesOrigin_NavFrame,2) <= ui32TargetBodyID && ui32TargetBodyID > 0, 'Invalid target body index!')
+
+            % Roto-translation pose to apply
+            dNewOriginPosition_NavFrame         = dBodiesOrigin_NavFrame(:, ui32TargetBodyID);
+            dNewFrameDCM_NewFrameFromNavFrame   = transpose( dBodiesAttDCM_NavFrameFromOF(3,3,ui32TargetBodyID) );
+
+            % Set target pose to Identity.
+            dBodiesOrigin_NavFrame(:, ui32TargetBodyID) = zeros(3,ui32TargetBodyID);
+            dBodiesAttDCM_NavFrameFromOF(3,3, ui32TargetBodyID) = eye(3);
+
+            % Roto-translate camera pose
+            dCameraOrigin_NavFrame = transpose(dNewFrameDCM_NavFrameFromNewFrame) * (dCameraOrigin_NavFrame - dNewOriginPosition_NavFrame);
+            dCameraAttDCM_NavframeFromOF = dNewFrameDCM_NewFrameFromNavFrame * dCameraAttDCM_NavframeFromOF;
+
+            % Roto-translate Sun position
+            dSunVector_NavFrame = dNewFrameDCM_NewFrameFromNavFrame * (dSunVector_NavFrame - dNewOriginPosition_NavFrame);
+
+            % Roto-translate bodies poses
+            for idB = 1:size(dBodiesOrigin_NavFrame, 2)
+                
+                if idB ~= ui32TargetBodyID
+                    dBodiesOrigin_NavFrame(:, idB) = dNewFrameDCM_NewFrameFromNavFrame * (dBodiesOrigin_NavFrame(:, idB) - dNewOriginPosition_NavFrame);
+                    dBodiesAttDCM_NavFrameFromOF(:,:,idB) = dNewFrameDCM_NewFrameFromNavFrame * dBodiesAttDCM_NavFrameFromOF(:,:,idB);
+                end
+            end
+
+        end
 
         function [dSunBlenderQuat_OFfromNavFrame, dSunDCM_OFfromNavFrame] = computeSunBlenderQuatFromPosition(dSunPositionArray_NavFrame)
             arguments
