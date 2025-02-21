@@ -191,7 +191,7 @@ classdef CommManager < handle
                     % UDP-TCP communication (2 objects)                    
                     
                     % TODO (PC)
-                    fprintf('\nInitializing communication objects... \n');
+                    fprintf('\nInitializing communication objects UDP and TCP... \n');
                     
                     % UDP port
                     fprintf('\tUDP client object at HOST: %s - PORT: %s \n', self.charServerAddress, num2str(self.ui32ServerPort(2)));

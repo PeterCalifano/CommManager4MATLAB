@@ -966,11 +966,12 @@ classdef BlenderPyCommManager < CommManager
             ui32NumOfBodies = size(dBodiesOrigin_NavFrame, 2);
             assert(size(dBodiesAttDCM_NavFrameFromOF, 3) == ui32NumOfBodies, 'Unmatched number of bodies in Position and Attitude DCM arrays. Please check input data.');
             
-            if kwargs.bAutomaticConvertToTargetFixed
+            if kwargs.bAutomaticConvertToTargetFixed && not(kwargs.enumRenderingFrame == EnumRenderingFrame.TARGET_BODY)
                 % Automatically convert data to target fixed frame before applying composition
                 % NOTE: NavFrame becomes "target fixed frame" if this options executes. The first body is
                 % assumed as the fixed one.
-
+               
+                fprintf( "\tInput data in %s frame. Autoconversion to TARGET_BODY frame enabled...\n", char(kwargs.enumRenderingFrame) )
                 [dSunVector_NavFrame, dCameraOrigin_NavFrame, ...
                 dCameraAttDCM_NavframeFromOF, dBodiesOrigin_NavFrame, ...
                 dBodiesAttDCM_NavFrameFromOF] = BlenderPyCommManager.ConvertSceneToBodyFixedFrame(dSunVector_NavFrame, ...
@@ -1215,14 +1216,14 @@ classdef BlenderPyCommManager < CommManager
 
             % Roto-translation pose to apply
             dNewOriginPosition_NavFrame         = dBodiesOrigin_NavFrame(:, ui32TargetBodyID);
-            dNewFrameDCM_NewFrameFromNavFrame   = transpose( dBodiesAttDCM_NavFrameFromOF(3,3,ui32TargetBodyID) );
+            dNewFrameDCM_NewFrameFromNavFrame   = transpose( dBodiesAttDCM_NavFrameFromOF(:, :, ui32TargetBodyID) );
 
             % Set target pose to Identity.
             dBodiesOrigin_NavFrame(:, ui32TargetBodyID) = zeros(3,ui32TargetBodyID);
-            dBodiesAttDCM_NavFrameFromOF(3,3, ui32TargetBodyID) = eye(3);
+            dBodiesAttDCM_NavFrameFromOF(:,:, ui32TargetBodyID) = eye(3);
 
             % Roto-translate camera pose
-            dCameraOrigin_NavFrame = transpose(dNewFrameDCM_NavFrameFromNewFrame) * (dCameraOrigin_NavFrame - dNewOriginPosition_NavFrame);
+            dCameraOrigin_NavFrame       = dNewFrameDCM_NewFrameFromNavFrame * (dCameraOrigin_NavFrame - dNewOriginPosition_NavFrame);
             dCameraAttDCM_NavframeFromOF = dNewFrameDCM_NewFrameFromNavFrame * dCameraAttDCM_NavframeFromOF;
 
             % Roto-translate Sun position
