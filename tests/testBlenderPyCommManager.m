@@ -453,12 +453,12 @@ bUseRCS1 = true;
 if bUseRCS1 == true
     charRootPath = "/home/peterc/devDir/projects-DART/rcs-1-gnc-simulator";
     charDataPath = "/home/peterc/devDir/projects-DART/data/rcs-1/pre-phase-A/blender/Apophis_RGB.blend";
-    charBlenderPyInterfacePath          = fullfile(charRootPath, "lib/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface.py" );
+    charBlenderPyInterfacePath          = fullfile(charRootPath, "lib/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface_withCaching.py" );
     charStartBlenderServerScriptPath    = fullfile(charRootPath, "lib/corto_PeterCdev/server_api/StartBlenderServer.sh");
 else
     charRootPath = "/home/peterc/devDir/rendering-sw/corto_PeterCdev";
     charBlenderModelPath        = fullfile(charRootPath, "data/scenarios/S2_Itokawa/S2_Itokawa.blend");
-    charBlenderPyInterfacePath  = fullfile(charRootPath, "server_api/BlenderPy_UDP_TCP_interface.py" );
+    charBlenderPyInterfacePath  = fullfile(charRootPath, "server_api/BlenderPy_UDP_TCP_interface_withCaching.py" );
     charStartBlenderServerScriptPath    = fullfile(charRootPath, "server_api/StartBlenderServer.sh");
 end
 
@@ -479,7 +479,7 @@ objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort
 % Define scene 
 ui32TimestampsGrid = round(linspace(1, length(strScenConfig.dTimestamps), 200));
 
-ui32NumOfImgs = length(ui32TimestampsGrid); %length(strScenConfig.dTimestamps);
+ui32NumOfImgs = 10; % length(ui32TimestampsGrid); %length(strScenConfig.dTimestamps);
 
 % Nav frame is TARGET BODY frame
 % Convert Blender quaternions to DCM for testing
@@ -529,11 +529,7 @@ dSunVector_Buffer_NavFrame = 1000 * repmat(dCameraOrigin_SunRef_NavFrame, 1, siz
 % Test renderImageSequence method
 bConvertCamQuatToBlenderQuat = true;
 bEnableFramesPlot = false;
-bDisplayImage = false;
-
-bConvertCamQuatToBlenderQuat = true;
-bEnableFramesPlot = false;
-bDisplayImage = false;
+bDisplayImage = true;
 
 ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_NavFrame, ...
                                                  dCameraOrigin_Buffer_NavFrame, ...
