@@ -227,6 +227,10 @@ classdef BlenderPyCommManager < CommManager
                 % self.ui32NumOfChannels = self.strConfigFromYaml.Camera_params.n_channels;
                 dFocalLength_uv = [(dSensor_size_x / 2) / tand(dFOV_x / 2), (dSensor_size_y / 2) / tand(dFOV_y / 2)];
 
+                if ui32NumOfChannels == 3
+                    ui32NumOfChannels = ui32NumOfChannels + 1;
+                end
+
                 % Construct camera intrinsics object
                 self.objCameraIntrinsics = CCameraIntrinsics( dFocalLength_uv, dPrincipalPoint_uv, [dSensor_size_x, dSensor_size_y], ui32NumOfChannels );
 
@@ -688,6 +692,35 @@ classdef BlenderPyCommManager < CommManager
             self.bIsServerRunning = bIsServerRunning;
         end
 
+        function [charStartBlenderCommand] = getBlenderStartCommand_(self)
+            % Method to compose command to manually start server with provided paths
+                % setup everything calling Blender when needed for rendering
+                assert(isfile(self.charBlenderModelPath), sprintf('Blender model file %s not found.', self.charBlenderModelPath))
+                assert(isfile(self.charBlenderPyInterfacePath), sprintf('CORTO interface pyscript not found at %s.', self.charBlenderPyInterfacePath))
+                assert(isfile(self.charStartBlenderServerCallerPath), sprintf('Bash script to start CORTO interface pyscript not found at %s.', self.charStartBlenderServerCallerPath))
+
+                % Check if path has extesion
+                [charFileRoot, charFileName, charFileExt] = fileparts(self.charStartBlenderServerCallerPath);
+
+                if isempty(charFileExt) == true
+                    self.charStartBlenderServerCallerPath = fullfile(charFileRoot, charFileName, charFileExt);
+                end
+
+                % Construct command to run
+                charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+                    self.charStartBlenderServerCallerPath, self.charBlenderModelPath, self.charBlenderPyInterfacePath);
+
+                % Logging options
+                if self.bSendLogToShellPipe == true
+                    system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
+                    charStartBlenderCommand = char(strcat(charStartBlenderCommand, " > /tmp/blender_pipe &"));
+                else
+                    charStartBlenderCommand = char(strcat(charStartBlenderCommand, " &"));
+                end
+
+        end
+
+
         function [bIsServerRunning] = checkRunningBlenderServer(self)
             [bIsServerRunning] = BlenderPyCommManager.checkRunningBlenderServerStatic(self.ui32ServerPort(1));
             self.bIsServerRunning = bIsServerRunning;
@@ -764,9 +797,12 @@ classdef BlenderPyCommManager < CommManager
             dG = dImgBuffer(2:4:end);
             dB = dImgBuffer(3:4:end);
 
-            assert(length(dR) == ui32ImgWidth * ui32ImgHeight, 'Incorrect size of image buffer, not matching specified resolution. Something may have gone wrong in the configuration.')
-            assert(length(dG) == ui32ImgWidth * ui32ImgHeight, 'Incorrect size of image buffer, not matching specified resolution. Something may have gone wrong in the configuration.')
-            assert(length(dB) == ui32ImgWidth * ui32ImgHeight, 'Incorrect size of image buffer, not matching specified resolution. Something may have gone wrong in the configuration.')
+            assert(length(dR) == ui32ImgWidth * ui32ImgHeight, sprintf(['Incorrect size of image buffer (R-channel). Actual %d. ' ...
+                'Expected %d. Something may have gone wrong in the configuration.'], length(dR), ui32ImgWidth * ui32ImgHeight)) 
+            assert(length(dG) == ui32ImgWidth * ui32ImgHeight, sprintf(['Incorrect size of image buffer (G-channel). Actual %d. ' ...
+                'Expected %d. Something may have gone wrong in the configuration.'], length(dG), ui32ImgWidth * ui32ImgHeight))
+            assert(length(dB) == ui32ImgWidth * ui32ImgHeight, sprintf(['Incorrect size of image buffer (B-channel). Actual %d. ' ...
+                'Expected %d. Something may have gone wrong in the configuration.'], length(dB), ui32ImgWidth * ui32ImgHeight))
 
             % Reshape the RGB channels as matrix
             dR = ( flip( reshape( dR', ui32ImgWidth, ui32ImgHeight), 2) )';
