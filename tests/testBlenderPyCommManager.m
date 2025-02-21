@@ -129,6 +129,7 @@ objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort
 % Delete instance and terminate server
 delete(objBlenderPyCommManager)
 return
+
 %% BlenderPyCommManager_renderImageFromPQ_
 clear objBlenderPyCommManager
 
@@ -149,14 +150,12 @@ dImg = objBlenderPyCommManager.renderImageFromPQ_(dSceneDataVector_ref, ...
     "bApplyBayerFilter", bApplyBayerFilter, "bIsImageRGB", bIsImageRGB); 
 
 
-% TODO: fix issue in reception. The issue is that ReadBuffer assumes the sender specifies 4 bytes for the
-% message length first, but it is not the case here. --> add length as input to Read buffer, that if not 0
-% makes the class avoid the reading of the first 4 bytes.
 figure('WindowState', 'normal')
 imshow(dImg);
 pause(1);
 clear objBlenderPyCommManager
 return
+
 
 %% BlenderPyCommManager_composeSceneDataVector
 clear objBlenderPyCommManager_test
@@ -206,7 +205,6 @@ objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort
 % Assign data
 % Nav frame is CAMERA frame
 
-error('TODO ACHTUNG: modify test to reflect fix. Blender requires quaternion from NavFrame to OF!')
 % Convert Blender quaternions to DCM for testing (quaternions already in Blender convention)
 dSunVector_NavFrame             = dSunPos;
 dCameraOrigin_NavFrame          = dSCPos;
@@ -272,12 +270,71 @@ pause(2);
 clear objBlenderPyCommManager
 return
 
+%% BlenderPyCommManager_renderImage_AutoConversion
+clear objBlenderPyCommManager
+
+% Instance definition with automatic management of server
+objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, ...
+    'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
+    'bAutoManageBlenderServer', true, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
+    'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', i64RecvTCPsize, ...
+    "bAutomaticConvertToTargetFixed", true);
+
+
+% Assign data
+% Nav frame is CAMERA frame
+
+% Convert Blender quaternions to DCM for testing (quaternions already in Blender convention)
+dSunVector_NavFrame             = dSunPos;
+dCameraOrigin_NavFrame          = dSCPos;
+dCameraAttDCM_NavframeFromOF    = quat2dcm(dSCquat);
+dBodiesOrigin_NavFrame          = dBody1Pos;
+dBodiesAttDCM_NavFrameFromOF    = quat2dcm(dBody1Quat);
+
+% Test renderImage method WITHOUT conversion
+dImg_REF = objBlenderPyCommManager.renderImage(dSunVector_NavFrame', ...
+                                        dCameraOrigin_NavFrame', ...
+                                        dCameraAttDCM_NavframeFromOF, ...
+                                        dBodiesOrigin_NavFrame', ...
+                                        dBodiesAttDCM_NavFrameFromOF, ...
+                                        "enumRenderingFrame", EnumRenderingFrame.CAMERA, ...
+                                        'bConvertCamQuatToBlenderQuat', false, ...
+                                        "bAutomaticConvertToTargetFixed", false);
+
+pause(1);
+
+% Test renderImage method WITH AUTO CONVERSION
+dImg = objBlenderPyCommManager.renderImage(dSunVector_NavFrame', ...
+                                        dCameraOrigin_NavFrame', ...
+                                        dCameraAttDCM_NavframeFromOF, ...
+                                        dBodiesOrigin_NavFrame', ...
+                                        dBodiesAttDCM_NavFrameFromOF, ...
+                                        "enumRenderingFrame", EnumRenderingFrame.CAMERA, ...
+                                        'bConvertCamQuatToBlenderQuat', false, ...
+                                        "bAutomaticConvertToTargetFixed", true);
+
+
+
+figure('WindowState', 'normal')
+imshow(dImg_REF);
+title('Method: renderImage')
+
+figure('WindowState', 'normal')
+imshow(dImg);
+title('Method: renderImage with automatic conversion to target fixed')
+
+pause(2);
+
+% Delete instance and terminate server
+clear objBlenderPyCommManager
+return
 
 %% BlenderPyCommManager_renderImageSequence_Itokawa
 clear objBlenderPyCommManager
 close all
 pause(0.2);
-% TODO: load setup for SLAM simulations
+
 addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
 run('loadSimulationSetup');
 
@@ -386,7 +443,7 @@ ui8OutImgArrays = objBlenderPyCommManager.renderImageSequence(dSunVector_Buffer_
 clear objBlenderPyCommManager
 close all
 pause(0.2);
-% TODO: load setup for SLAM simulations
+
 addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
 run('loadSimulationSetup');
 
