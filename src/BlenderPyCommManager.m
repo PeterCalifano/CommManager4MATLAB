@@ -446,8 +446,12 @@ classdef BlenderPyCommManager < CommManager
             % outImgArrays = zeros(objCameraIntrinsics_.ImageSize(1), objCameraIntrinsics_.ImageSize(2), ...
             %     objCameraIntrinsics_.ui32NumOfChannels, ui32NumOfImages, char( kwargs.charOutputDatatype) );
 
-            outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), ...
-                ui32NumOfImages, char( kwargs.charOutputDatatype) );
+            %outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), ...
+            %    ui32NumOfImages, char( kwargs.charOutputDatatype) );
+            
+            % Placeholder for output images
+            outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), 1, kwargs.charOutputDatatype);
+
             % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
 
             if kwargs.enumRenderingFrame == "CUSTOM_FRAME"
@@ -515,13 +519,15 @@ classdef BlenderPyCommManager < CommManager
                                         "bAutomaticConvertToTargetFixed", kwargs.bAutomaticConvertToTargetFixed); % TODO: specify kwargs and how to treat image
 
                 % Store image into output array
-                outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), idImg) = cast(dImg, kwargs.charOutputDatatype);
+                %outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), %idImg) = cast(dImg, kwargs.charOutputDatatype);
+                outImgArrays = cast(dImg, kwargs.charOutputDatatype);
                 fprintf("Completed image %d of %d.\n", idImg, ui32NumOfImages)
 
                 if kwargs.bDisplayImage
                     figure(95)
                     clf;
-                    imshow( outImgArrays(:,:,idImg) )
+                    %imshow( outImgArrays(:,:,idImg) )
+                    imshow( dImg )
                     axis image
                 end
 
