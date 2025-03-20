@@ -368,15 +368,16 @@ classdef BlenderPyCommManager < CommManager
                 dBodiesAttDCM_Buffer_NavFrameFromOF     (3,3,:,:)   double {ismatrix, isnumeric} = eye(3)
             end
             arguments (Input)
-                kwargs.ui32TargetPort                  (1,1) uint32 {isscalar, isnumeric} = 0
-                kwargs.charOutputDatatype              (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"])} = "uint8"
-                kwargs.ui32NumOfBodies                 (1,1) uint32 {isnumeric, isscalar} = 1
-                kwargs.objCameraIntrinsics             (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
-                kwargs.enumRenderingFrame              (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.bEnableFramesPlot               (1,1) logical {islogical} = false;
-                kwargs.bConvertCamQuatToBlenderQuat    (1,1) logical {isscalar, islogical} = true;
-                kwargs.bDisplayImage                   (1,1) logical {islogical} = false;
-                kwargs.bAutomaticConvertToTargetFixed  (1,1) logical {islogical} = self.bAutomaticConvertToTargetFixed;
+                kwargs.ui32TargetPort                   (1,1) uint32 {isscalar, isnumeric} = 0
+                kwargs.charOutputDatatype               (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"])} = "uint8"
+                kwargs.ui32NumOfBodies                  (1,1) uint32 {isnumeric, isscalar} = 1
+                kwargs.objCameraIntrinsics              (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
+                kwargs.enumRenderingFrame               (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.bEnableFramesPlot                (1,1) logical {islogical} = false;
+                kwargs.bConvertCamQuatToBlenderQuat     (1,1) logical {isscalar, islogical} = true;
+                kwargs.bDisplayImage                    (1,1) logical {islogical} = false;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical {islogical} = self.bAutomaticConvertToTargetFixed;
+                kwargs.ui32FirstImgID                   (1,1) uint32 {isnumeric, isscalar} = 1
             end
                 
             % Determine number of images from camera origin array
@@ -460,9 +461,9 @@ classdef BlenderPyCommManager < CommManager
 
             objSceneFigs = gobjects(ui32NumOfImages, 1);
 
-            for idImg = 1:ui32NumOfImages
+            for idImg = kwargs.ui32FirstImgID:ui32NumOfImages
                 
-                % Get data from buffers
+                % Get data from buffers>
                 dSunVector_NavFrame             = dSunVector_Buffer_NavFrame         (:, idImg);
                 dCameraOrigin_NavFrame          = dCameraOrigin_Buffer_NavFrame      (:, idImg);
                 dCameraAttDCM_NavframeFromOF    = dCameraAttDCM_Buffer_NavframeFromOF(:,:, idImg);
