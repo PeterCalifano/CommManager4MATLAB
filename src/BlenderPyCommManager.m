@@ -51,6 +51,7 @@ classdef BlenderPyCommManager < CommManager
         % Runtime flags
         bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
         bIsServerRunning                        (1,1) logical {islogical, isscalar} = false
+        ui32ServerPID                           uint32 {mustBeScalarOrEmpty} = []
     end
 
 
@@ -147,6 +148,7 @@ classdef BlenderPyCommManager < CommManager
 
             % Start server if in auto management mode
             if bIsValidServerAutoManegementConfig
+                % TODO: add storage of PID to ensure only that process will be killed!
                 [self.bIsServerRunning] = self.startBlenderServer();
             end
 
@@ -697,6 +699,7 @@ classdef BlenderPyCommManager < CommManager
                                                                              self.bIsValidServerAutoManegementConfig);
 
             self.bIsServerRunning = bIsServerRunning;
+            pause(2);
         end
 
         function [charStartBlenderCommand] = getBlenderStartCommand_(self)
@@ -739,7 +742,8 @@ classdef BlenderPyCommManager < CommManager
                 fprintf("\nAuto managed mode is enabled. Attempting to terminate Blender processes automatically... \n")
             end
             % Call static termination method
-            BlenderPyCommManager.terminateBlenderProcessesStatic()
+            % DEVTMP temporarily disable!
+            % BlenderPyCommManager.terminateBlenderProcessesStatic()
         end
 
 
@@ -973,7 +977,7 @@ classdef BlenderPyCommManager < CommManager
                     % Kill the process
                     for pid = pids
                         fprintf('Killing process %s...\n', pid{:})
-                        system(sprintf('kill -9 %s', pid{:}));
+                        % system(sprintf('kill -9 %s', pid{:}));
                     end
                 end
 
