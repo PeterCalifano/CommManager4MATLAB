@@ -52,6 +52,10 @@ classdef BlenderPyCommManager < CommManager
         bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
         bIsServerRunning                        (1,1) logical {islogical, isscalar} = false
         ui32ServerPID                           uint32 {mustBeScalarOrEmpty} = []
+
+
+        % For cross-validation and debug using emulator
+        objShapeModel = [];
     end
 
 
@@ -81,7 +85,9 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
                 kwargs.bSendLogToShellPipe              (1,1) logical       {islogical, isscalar} = false;
-                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false; 
+                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false;
+                kwargs.bDEBUG_MODE                      (1,1) logical       {islogical, isscalar} = false;
+                kwargs.objShapeModel                     = []
             end
 
             bIsValidServerAutoManegementConfig = false;
@@ -135,6 +141,8 @@ classdef BlenderPyCommManager < CommManager
                 'i64RecvTCPsize', kwargs.i64RecvTCPsize, 'ui32TargetPort',  kwargs.ui32TargetPort);
 
             self.bDefaultConstructed = false; % This class cannot be constructed as non-functional.
+            self.bDEBUG_MODE    = kwargs.bDEBUG_MODE;
+            self.objShapeModel  = kwargs.objShapeModel;
 
             % Store paths
             self.charStartBlenderServerCallerPath = kwargs.charStartBlenderServerCallerPath;
@@ -355,19 +363,19 @@ classdef BlenderPyCommManager < CommManager
         % METHODS
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % IMAGES SEQUENCE RENDERING from "disaggregated" scene data
-        function [outImgArrays, objSceneFigs, self] = renderImageSequence(self, dSunVector_Buffer_NavFrame , ...
-                                                         dCameraOrigin_Buffer_NavFrame, ...
-                                                         dCameraAttDCM_Buffer_NavframeFromOF, ...
-                                                         dBodiesOrigin_Buffer_NavFrame, ...
-                                                         dBodiesAttDCM_Buffer_NavFrameFromOF, ...
+        function [outImgArrays, objSceneFigs, self] = renderImageSequence(self, dSunVector_Buffer_RenderFrame , ...
+                                                         dCameraOrigin_Buffer_RenderFrame, ...
+                                                         dCameraAttDCM_Buffer_RenderFrameFromOF, ...
+                                                         dBodiesOrigin_Buffer_RenderFrame, ...
+                                                         dBodiesAttDCM_Buffer_RenderFrameFromOF, ...
                                                          kwargs)
             arguments (Input)
                 self
-                dSunVector_Buffer_NavFrame              (3,:)       double {isvector, isnumeric}
-                dCameraOrigin_Buffer_NavFrame           (3,:)       double {isvector, isnumeric}
-                dCameraAttDCM_Buffer_NavframeFromOF     (3,3,:)     double {ismatrix, isnumeric}
-                dBodiesOrigin_Buffer_NavFrame           (3,:,:)     double {ismatrix, isnumeric} = zeroes(3,1)
-                dBodiesAttDCM_Buffer_NavFrameFromOF     (3,3,:,:)   double {ismatrix, isnumeric} = eye(3)
+                dSunVector_Buffer_RenderFrame              (3,:)       double {isvector, isnumeric}
+                dCameraOrigin_Buffer_RenderFrame           (3,:)       double {isvector, isnumeric}
+                dCameraAttDCM_Buffer_RenderFrameFromOF     (3,3,:)     double {ismatrix, isnumeric}
+                dBodiesOrigin_Buffer_RenderFrame           (3,:,:)     double {ismatrix, isnumeric} = zeroes(3,1)
+                dBodiesAttDCM_Buffer_RenderFrameFromOF     (3,3,:,:)   double {ismatrix, isnumeric} = eye(3)
             end
             arguments (Input)
                 kwargs.ui32TargetPort                   (1,1) uint32 {isscalar, isnumeric} = 0
@@ -383,7 +391,7 @@ classdef BlenderPyCommManager < CommManager
             end
                 
             % Determine number of images from camera origin array
-            ui32NumOfImages = uint32(size(dCameraOrigin_Buffer_NavFrame, 2));
+            ui32NumOfImages = uint32(size(dCameraOrigin_Buffer_RenderFrame, 2));
 
             % Determine number of bodies and check validity
             % Default number of body is 1. Overridden by yaml configuration if any.
@@ -393,27 +401,27 @@ classdef BlenderPyCommManager < CommManager
             end
 
             if (ui32NumOfBodies == 1 && ui32NumOfImages > 1) || (ui32NumOfImages == 1 && ui32NumOfBodies > 1)
-                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromOF) == 3);
+                assert( ndims(dBodiesAttDCM_Buffer_RenderFrameFromOF) == 3);
             elseif ui32NumOfBodies == 1 && ui32NumOfImages == 1
-                assert( ismatrix(dBodiesAttDCM_Buffer_NavFrameFromOF));
+                assert( ismatrix(dBodiesAttDCM_Buffer_RenderFrameFromOF));
             elseif ui32NumOfBodies > 1 && ui32NumOfImages > 1
-                assert( ndims(dBodiesAttDCM_Buffer_NavFrameFromOF) == 4);
+                assert( ndims(dBodiesAttDCM_Buffer_RenderFrameFromOF) == 4);
             else
-                error('Invalid size of dBodiesAttDCM_Buffer_NavFrameFromOF')
+                error('Invalid size of dBodiesAttDCM_Buffer_RenderFrameFromOF')
             end
 
             % Assert validity of other buffers
-            assert(size(dSunVector_Buffer_NavFrame, 2) == ui32NumOfImages, ...
-                'dSunVector_Buffer_NavFrame must have the same number of columns as images.');
+            assert(size(dSunVector_Buffer_RenderFrame, 2) == ui32NumOfImages, ...
+                'dSunVector_Buffer_RenderFrame must have the same number of columns as images.');
 
-            assert(size(dCameraAttDCM_Buffer_NavframeFromOF, 3) == ui32NumOfImages, ...
-                'dCameraAttDCM_Buffer_NavframeFromOF must have the same 3rd dimension as images.');
+            assert(size(dCameraAttDCM_Buffer_RenderFrameFromOF, 3) == ui32NumOfImages, ...
+                'dCameraAttDCM_Buffer_RenderFrameFromOF must have the same 3rd dimension as images.');
 
-            assert(size(dBodiesOrigin_Buffer_NavFrame, 3) == kwargs.ui32NumOfBodies, ...
-                'dBodiesOrigin_Buffer_NavFrame must have the same 3rd dimension as number of bodies.');
+            assert(size(dBodiesOrigin_Buffer_RenderFrame, 3) == kwargs.ui32NumOfBodies, ...
+                'dBodiesOrigin_Buffer_RenderFrame must have the same 3rd dimension as number of bodies.');
 
-            assert(size(dBodiesAttDCM_Buffer_NavFrameFromOF, 4) == kwargs.ui32NumOfBodies, ...
-                'dBodiesAttDCM_Buffer_NavFrameFromOF must have the same 4th dimension as number of bodies.');
+            assert(size(dBodiesAttDCM_Buffer_RenderFrameFromOF, 4) == kwargs.ui32NumOfBodies, ...
+                'dBodiesAttDCM_Buffer_RenderFrameFromOF must have the same 4th dimension as number of bodies.');
 
 
             % Optionally the user may instantiate the class or set the data for rendering sequence before calling this method. Default args uses class attributes.
@@ -455,10 +463,27 @@ classdef BlenderPyCommManager < CommManager
             % Placeholder for output images
             outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), 1, kwargs.charOutputDatatype);
 
-            % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
+            % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_RenderFrame);
 
             if kwargs.enumRenderingFrame == "CUSTOM_FRAME"
                 fprintf("\nScene data specified with respect to a custom frame. No check or transformation of the inputs is performed at rendering time.\n")
+            end
+
+
+            if self.bDEBUG_MODE && not(isempty(self.objShapeModel))
+                try
+                    % Define target and frontend emulator for DEBUG
+                    objEmulatorSettings = SFrontEndTrackerEmulatorSettings("enumRandProcessType", "NONE", "enumTrackLossModel", ...
+                        "NONE", "ui32MAX_NUM_FEATURES", 1e3, 'bUseMexMethods', true);
+
+                    objTargetEmulator = CTargetEmulator(self.objShapeModel, 1e3, SPose3());
+                    objFrontEndEmulator = CFrontEndTracker_Emulator(self.objCameraIntrinsics, ...
+                                                                objTargetEmulator, ...
+                                                                objEmulatorSettings);
+                catch ME
+                    warning('Debug mode failed to activate due to error: %s.', string(ME.message))
+                end
+
             end
 
             objSceneFigs = gobjects(ui32NumOfImages, 1);
@@ -466,42 +491,68 @@ classdef BlenderPyCommManager < CommManager
             for idImg = kwargs.ui32FirstImgID:ui32NumOfImages
                 
                 % Get data from buffers>
-                dSunVector_NavFrame             = dSunVector_Buffer_NavFrame         (:, idImg);
-                dCameraOrigin_NavFrame          = dCameraOrigin_Buffer_NavFrame      (:, idImg);
-                dCameraAttDCM_NavframeFromOF    = dCameraAttDCM_Buffer_NavframeFromOF(:,:, idImg);
+                dSunVector_RenderFrame             = dSunVector_Buffer_RenderFrame         (:, idImg);
+                dCameraOrigin_RenderFrame          = dCameraOrigin_Buffer_RenderFrame      (:, idImg);
+                dCameraAttDCM_RenderFrameFromOF    = dCameraAttDCM_Buffer_RenderFrameFromOF(:,:, idImg);
 
                 if ui32NumOfBodies == 1
                     % Handle single body assuming 2D and 3D arrays as inputs
-                    dBodiesOrigin_NavFrame          = dBodiesOrigin_Buffer_NavFrame      (:, idImg);
-                    dBodiesAttDCM_NavFrameFromOF    = dBodiesAttDCM_Buffer_NavFrameFromOF(:,:, idImg);
+                    dBodiesOrigin_RenderFrame          = dBodiesOrigin_Buffer_RenderFrame      (:, idImg);
+                    dBodiesAttDCM_RenderFrameFromOF    = dBodiesAttDCM_Buffer_RenderFrameFromOF(:,:, idImg);
 
                 else
                     % Handle multiple bodies as 3D and 4D matrices for positions and DCMs
-                    dBodiesOrigin_NavFrame          = dBodiesOrigin_Buffer_NavFrame      (:,:, idImg);
-                    dBodiesAttDCM_NavFrameFromOF    = dBodiesAttDCM_Buffer_NavFrameFromOF(:,:,:, idImg);
+                    dBodiesOrigin_RenderFrame          = dBodiesOrigin_Buffer_RenderFrame      (:,:, idImg);
+                    dBodiesAttDCM_RenderFrameFromOF    = dBodiesAttDCM_Buffer_RenderFrameFromOF(:,:,:, idImg);
                 end
+
+                % Update objects for debug mode
+                if self.bDEBUG_MODE
+                    objTargetEmulator   = objTargetEmulator.SetPose3(SPose3( dBodiesOrigin_RenderFrame(:,1), dBodiesAttDCM_RenderFrameFromOF(:,:,1) ));
+                    objTargetEmulator   = objTargetEmulator.SampleMeshPoints();
+
+                    objFrontEndEmulator = objFrontEndEmulator.updateTargetEmulator(objTargetEmulator);
+                end
+
 
                 try
                     if kwargs.bEnableFramesPlot
                         fprintf("\nProducing requested visualization of scene frames to render...\n")
 
-                            % Convert DCMs to quaternion
-                            dSceneEntityQuatArray_RenderFrameFromOF = transpose( dcm2quat(dBodiesAttDCM_NavFrameFromOF) );
-                            dCameraQuat_RenderFrameFromCam          = transpose( dcm2quat(dCameraAttDCM_NavframeFromOF) );
+                        % Convert DCMs to quaternion
+                        dSceneEntityQuatArray_RenderFrameFromOF = transpose( dcm2quat(dBodiesAttDCM_RenderFrameFromOF) );
+                        dCameraQuat_RenderFrameFromCam          = transpose( dcm2quat(dCameraAttDCM_RenderFrameFromOF) );
 
-                            % if kwargs.bConvertCamQuatToBlenderQuat
-                            % DEVNOTE: removed because plot function operates using the same convention as
-                            % this function, contrarily to Blender. Assuming that the plot is correct, the
-                            % downstream operations should be correct too.
-                            %     dCameraQuat_RenderFrameFromCam = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(dCameraQuat_RenderFrameFromCam);
-                            % end
+                        % if kwargs.bConvertCamQuatToBlenderQuat
+                        % DEVNOTE: removed because plot function operates using the same convention as
+                        % this function, contrarily to Blender. Assuming that the plot is correct, the
+                        % downstream operations should be correct too.
+                        %     dCameraQuat_RenderFrameFromCam = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(dCameraQuat_RenderFrameFromCam);
+                        % end
 
-                            % Construct figure with plot
-                            [objSceneFigs(idImg)] = PlotSceneFrames_Quat(dBodiesOrigin_NavFrame, ...
-                                                                          dSceneEntityQuatArray_RenderFrameFromOF, ...
-                                                                          dCameraOrigin_NavFrame, ...
-                                                                          dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true, ...
-                                                                          "charFigTitle", "Visualization with Blender camera quaternion");
+                        % Construct figure with plot
+                        [objSceneFigs(idImg)] = PlotSceneFrames_Quat(dBodiesOrigin_RenderFrame, ...
+                                                                    dSceneEntityQuatArray_RenderFrameFromOF, ...
+                                                                    dCameraOrigin_RenderFrame, ...
+                                                                    dCameraQuat_RenderFrameFromCam, 'bUseBlackBackground', true, ...
+                                                                    "charFigTitle", "Visualization with Blender camera quaternion");
+
+                        % Add Light direction to plot
+                        % If Sun specified, move light there
+                        objLight = light("Style", "Infinite", "Position", dSunVector_RenderFrame);
+                        camlight(objLight);
+
+                        % Normalize position to avoid unreadable plots
+                        dScaleDistanceSun = norm(dCameraOrigin_RenderFrame);
+                        dSunPosition_RenderFrame = dScaleDistanceSun * dSunVector_RenderFrame./norm(dSunVector_RenderFrame);
+
+                        hold on;
+                        dLineScale = 1.2;
+                        objSunDirPlot = plot3([0, dLineScale * dSunPosition_RenderFrame(1)], ...
+                            [0, dLineScale * dSunPosition_RenderFrame(2)], ...
+                            [0, dLineScale * dSunPosition_RenderFrame(3)], ...
+                            '-', 'Color', '#f48037', 'LineWidth', 2, 'DisplayName', 'To Sun'); %#ok<NASGU>
+                        axis equal
                     end
 
                 catch ME
@@ -510,16 +561,16 @@ classdef BlenderPyCommManager < CommManager
                 end
 
                 fprintf("\nSending data to render image %d of %d...\n", idImg, ui32NumOfImages)
-                % Call renderImage implementation ( TODO (PC) complete implementation ) 
-                dImg = self.renderImage(dSunVector_NavFrame, ...
-                                        dCameraOrigin_NavFrame, ...
-                                        dCameraAttDCM_NavframeFromOF, ...
-                                        dBodiesOrigin_NavFrame, ...
-                                        dBodiesAttDCM_NavFrameFromOF, ...
-                                        "enumRenderingFrame", kwargs.enumRenderingFrame, ...
-                                        "ui32TargetPort", kwargs.ui32TargetPort, ...
-                                        "bConvertCamQuatToBlenderQuat", kwargs.bConvertCamQuatToBlenderQuat, ...
-                                        "bAutomaticConvertToTargetFixed", kwargs.bAutomaticConvertToTargetFixed); % TODO: specify kwargs and how to treat image
+                % Call renderImage implementation 
+                dImg = self.renderImage(dSunVector_RenderFrame, ...
+                                    dCameraOrigin_RenderFrame, ...
+                                    dCameraAttDCM_RenderFrameFromOF, ...
+                                    dBodiesOrigin_RenderFrame, ...
+                                    dBodiesAttDCM_RenderFrameFromOF, ...
+                                    "enumRenderingFrame", kwargs.enumRenderingFrame, ...
+                                    "ui32TargetPort", kwargs.ui32TargetPort, ...
+                                    "bConvertCamQuatToBlenderQuat", kwargs.bConvertCamQuatToBlenderQuat, ...
+                                    "bAutomaticConvertToTargetFixed", kwargs.bAutomaticConvertToTargetFixed); % TODO: specify kwargs and how to treat image
 
                 % Store image into output array
                 %outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), %idImg) = cast(dImg, kwargs.charOutputDatatype);
@@ -532,14 +583,46 @@ classdef BlenderPyCommManager < CommManager
                     %imshow( outImgArrays(:,:,idImg) )
                     imshow( dImg )
                     axis image
+
+                    % DEBUG MODE using tracing to cross-validate scene geometry and rendered image
+                    % ACHTUNG: it slows down the process a lot!
+                    if self.bDEBUG_MODE
+
+                        try
+                            % Get projected keypoints on image plane and plot
+                            objKeypointsVisibilityPlot = figure(98);
+                            set(objKeypointsVisibilityPlot, 'Position', [0, 480, 480, 480]);
+
+                            objFrontEndEmulator = objFrontEndEmulator.acquireFrame(SPose3(dCameraOrigin_RenderFrame, dCameraAttDCM_RenderFrameFromOF), ...
+                                                                                       dBodiesAttDCM_RenderFrameFromOF(:,:,1)' * dSunVector_RenderFrame, ...
+                                                                                        idImg);
+
+                            imshow(dImg)
+                            hold on;
+
+                            % TODO add implementation to retrieve legend objects to function and test here!
+                            [objKeypointsVisibilityPlot] = CPointProjectionPlotter.PlotProjectedPoints({objFrontEndEmulator.dVisibleKeypointsGT_uv}, ...
+                                                                                            self.objCameraIntrinsics, ...
+                                                                                            "bUseBlackBackground", true, ...
+                                                                                            "cellPlotNames", {'Visible GT ShadowRay'}, ...
+                                                                                            "cellPlotColors", {'#FF5500'}, ...
+                                                                                            "objSceneFig", objKeypointsVisibilityPlot, ...
+                                                                                            "bEnableLegend", true, ...
+                                                                                            "bEnforcePlotOpts", true); %#ok<NASGU>
+
+                        catch ME
+                            warning('Cross-validation using frontend emulator failed to run due to error: %s. Debug mode forcefully disabled.', string(ME.message))
+                            self.bDEBUG_MODE = false;
+                        end
+                    end
                 end
 
 
                 % Get labels data
                 % TODO (PC) next upgrade, transmit through TCP? TBD
 
-                pause(0.5)
-                
+                pause(0.01)
+
                 if kwargs.bEnableFramesPlot
                     close(objSceneFigs(idImg)); % Close figure to prevent accumulation
                 end
@@ -560,31 +643,31 @@ classdef BlenderPyCommManager < CommManager
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % SINGLE IMAGE RENDERING from "disaggregated" scene data
         function [dImg, self] = renderImage(self, ...
-                                            dSunVector_NavFrame, ...
-                                            dCameraOrigin_NavFrame, ...
-                                            dCameraAttDCM_NavframeFromOF, ...
-                                            dBodiesOrigin_NavFrame, ...
-                                            dBodiesAttDCM_NavFrameFromOF, ...
+                                            dSunVector_RenderFrame, ...
+                                            dCameraOrigin_RenderFrame, ...
+                                            dCameraAttDCM_RenderFrameFromOF, ...
+                                            dBodiesOrigin_RenderFrame, ...
+                                            dBodiesAttDCM_RenderFrameFromOF, ...
                                             kwargs)
             arguments
                 self
-                dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
-                dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
-                dCameraAttDCM_NavframeFromOF    (3,3)   double {ismatrix, isnumeric}
-                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeros(3,1)
-                dBodiesAttDCM_NavFrameFromOF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
+                dSunVector_RenderFrame             (3,1)   double {isvector, isnumeric}
+                dCameraOrigin_RenderFrame          (3,1)   double {isvector, isnumeric}
+                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {ismatrix, isnumeric}
+                dBodiesOrigin_RenderFrame          (3,:)   double {ismatrix, isnumeric} = zeros(3,1)
+                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
             end
             arguments % kwargs arguments
                 kwargs.enumRenderingFrame               (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
                 kwargs.dRenderFrameOrigin               (3,1) double  {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_NavFrameFromRenderFrame     (3,3) double  {ismatrix, isnumeric} = eye(3)
+                kwargs.dDCM_RenderFrameFromRenderFrame     (3,3) double  {ismatrix, isnumeric} = eye(3)
                 kwargs.ui32TargetPort                   (1,1) uint32  {isscalar, isnumeric} = 0
                 kwargs.bConvertCamQuatToBlenderQuat     (1,1) logical {isscalar, islogical} = true;
                 kwargs.bAutomaticConvertToTargetFixed   (1,1) logical {isscalar, islogical} = self.bAutomaticConvertToTargetFixed;  
             end
             
             % Input size and validation checks
-            assert( size(dBodiesOrigin_NavFrame, 2) == size(dBodiesAttDCM_NavFrameFromOF, 3), 'Number of bodies position does not match number of attitude matrices')
+            assert( size(dBodiesOrigin_RenderFrame, 2) == size(dBodiesAttDCM_RenderFrameFromOF, 3), 'Number of bodies position does not match number of attitude matrices')
 
             if kwargs.ui32TargetPort > 0
                 % Temporarily override set target port
@@ -593,14 +676,14 @@ classdef BlenderPyCommManager < CommManager
             end
 
             % Determine size of vector
-            dSceneDataVector = zeros(1, 7 * (2 + size(dBodiesOrigin_NavFrame, 2))); % [PQ_i] representation [SunPQ, CameraPQ, Body1PQ, ... BodyNPQ]
+            dSceneDataVector = zeros(1, 7 * (2 + size(dBodiesOrigin_RenderFrame, 2))); % [PQ_i] representation [SunPQ, CameraPQ, Body1PQ, ... BodyNPQ]
 
             % Convert disaggregated scene data to dSceneData vector representation
-            dSceneDataVector(:) = self.composeSceneDataVector(dSunVector_NavFrame, dCameraOrigin_NavFrame, ...
-                dCameraAttDCM_NavframeFromOF, dBodiesOrigin_NavFrame, dBodiesAttDCM_NavFrameFromOF, ...
+            dSceneDataVector(:) = self.composeSceneDataVector(dSunVector_RenderFrame, dCameraOrigin_RenderFrame, ...
+                dCameraAttDCM_RenderFrameFromOF, dBodiesOrigin_RenderFrame, dBodiesAttDCM_RenderFrameFromOF, ...
                 'enumRenderingFrame', kwargs.enumRenderingFrame, ...
                 'dRenderFrameOrigin', kwargs.dRenderFrameOrigin, ...
-                'dDCM_NavFrameFromRenderFrame', kwargs.dDCM_NavFrameFromRenderFrame, ...
+                'dDCM_RenderFrameFromRenderFrame', kwargs.dDCM_RenderFrameFromRenderFrame, ...
                 'bConvertCamQuatToBlenderQuat', kwargs.bConvertCamQuatToBlenderQuat, ...
                 'bAutomaticConvertToTargetFixed', kwargs.bAutomaticConvertToTargetFixed);
 
@@ -621,7 +704,6 @@ classdef BlenderPyCommManager < CommManager
             if kwargs.ui32TargetPort > 0
                 self.ui32TargetPort = ui32PrevPort;
             end
-
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -986,32 +1068,32 @@ classdef BlenderPyCommManager < CommManager
         end
         
         % Compose scene data vector PQ 
-        function [dSceneDataVector] = composeSceneDataVector( dSunVector_NavFrame, ...
-                                                              dCameraOrigin_NavFrame, ...
-                                                              dCameraAttDCM_NavframeFromOF, ...
-                                                              dBodiesOrigin_NavFrame, ...
-                                                              dBodiesAttDCM_NavFrameFromOF, ...
+        function [dSceneDataVector] = composeSceneDataVector( dSunVector_RenderFrame, ...
+                                                              dCameraOrigin_RenderFrame, ...
+                                                              dCameraAttDCM_RenderFrameFromOF, ...
+                                                              dBodiesOrigin_RenderFrame, ...
+                                                              dBodiesAttDCM_RenderFrameFromOF, ...
                                                               kwargs)
             arguments
-                dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
-                dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
-                dCameraAttDCM_NavframeFromOF    (3,3)   double {ismatrix, isnumeric}
-                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric} = zeroes(3,1)
-                dBodiesAttDCM_NavFrameFromOF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
+                dSunVector_RenderFrame             (3,1)   double {isvector, isnumeric}
+                dCameraOrigin_RenderFrame          (3,1)   double {isvector, isnumeric}
+                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {ismatrix, isnumeric}
+                dBodiesOrigin_RenderFrame          (3,:)   double {ismatrix, isnumeric} = zeroes(3,1)
+                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {ismatrix, isnumeric} = eye(3)
             end
             arguments % kwargs arguments
-                kwargs.enumRenderingFrame              (1,1)    EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.dRenderFrameOrigin              (3,1)    double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_NavFrameFromRenderFrame    (3,3)    double {ismatrix, isnumeric} = eye(3)
-                kwargs.bConvertCamQuatToBlenderQuat    (1,1)    logical {islogical, isscalar} = false;
-                kwargs.bAutomaticConvertToTargetFixed  (1,1)    logical {islogical, isscalar} = false;
+                kwargs.enumRenderingFrame               (1,1)    EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.dRenderFrameOrigin               (3,1)    double {isvector, isnumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_RenderFrameFromRenderFrame  (3,3)    double {ismatrix, isnumeric} = eye(3)
+                kwargs.bConvertCamQuatToBlenderQuat     (1,1)    logical {islogical, isscalar} = false;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1)    logical {islogical, isscalar} = false;
             end
             % Method to compose scene data vector (PQ data). Input attitude matrices are the matrices that
             % project a vector A_OF in OF frame onto the basis composing NavFrame reference frame.
 
             % Get number of bodies
-            ui32NumOfBodies = size(dBodiesOrigin_NavFrame, 2);
-            assert(size(dBodiesAttDCM_NavFrameFromOF, 3) == ui32NumOfBodies, 'Unmatched number of bodies in Position and Attitude DCM arrays. Please check input data.');
+            ui32NumOfBodies = size(dBodiesOrigin_RenderFrame, 2);
+            assert(size(dBodiesAttDCM_RenderFrameFromOF, 3) == ui32NumOfBodies, 'Unmatched number of bodies in Position and Attitude DCM arrays. Please check input data.');
             
             if kwargs.bAutomaticConvertToTargetFixed && not(kwargs.enumRenderingFrame == EnumRenderingFrame.TARGET_BODY)
                 % Automatically convert data to target fixed frame before applying composition
@@ -1019,13 +1101,13 @@ classdef BlenderPyCommManager < CommManager
                 % assumed as the fixed one.
                
                 fprintf( "\tInput data in %s frame. Autoconversion to TARGET_BODY frame enabled...\n", char(kwargs.enumRenderingFrame) )
-                [dSunVector_NavFrame, dCameraOrigin_NavFrame, ...
-                dCameraAttDCM_NavframeFromOF, dBodiesOrigin_NavFrame, ...
-                dBodiesAttDCM_NavFrameFromOF] = BlenderPyCommManager.ConvertSceneToBodyFixedFrame(dSunVector_NavFrame, ...
-                                                                                                  dCameraOrigin_NavFrame, ...
-                                                                                                  dCameraAttDCM_NavframeFromOF, ...
-                                                                                                  dBodiesOrigin_NavFrame, ...
-                                                                                                  dBodiesAttDCM_NavFrameFromOF);
+                [dSunVector_RenderFrame, dCameraOrigin_RenderFrame, ...
+                dCameraAttDCM_RenderFrameFromOF, dBodiesOrigin_RenderFrame, ...
+                dBodiesAttDCM_RenderFrameFromOF] = BlenderPyCommManager.ConvertSceneToBodyFixedFrame(dSunVector_RenderFrame, ...
+                                                                                                  dCameraOrigin_RenderFrame, ...
+                                                                                                  dCameraAttDCM_RenderFrameFromOF, ...
+                                                                                                  dBodiesOrigin_RenderFrame, ...
+                                                                                                  dBodiesAttDCM_RenderFrameFromOF);
 
                 % Override enumRenderingFrame
                 kwargs.enumRenderingFrame = EnumRenderingFrame.TARGET_BODY;
@@ -1035,13 +1117,13 @@ classdef BlenderPyCommManager < CommManager
             % TODO: based on selected rendering frame, assert identity and origin
             if kwargs.enumRenderingFrame == EnumRenderingFrame.CAMERA
                 fprintf('\n\tUsing CAMERA frame as Rendering frame...\n')
-                assert( all(dCameraOrigin_NavFrame == 0, 'all') );
-                assert( all(dCameraAttDCM_NavframeFromOF == eye(3), 'all') )
+                assert( all(dCameraOrigin_RenderFrame == 0, 'all') );
+                assert( all(dCameraAttDCM_RenderFrameFromOF == eye(3), 'all') )
     
             elseif kwargs.enumRenderingFrame == EnumRenderingFrame.TARGET_BODY
                 fprintf('\n\tUsing TARGET_BODY frame as Rendering frame...')
-                assert( all(dBodiesOrigin_NavFrame(:, 1) == 0, 'all') );
-                assert( all(dBodiesAttDCM_NavFrameFromOF(:,:,1) == eye(3), 'all') )
+                assert( all(dBodiesOrigin_RenderFrame(:, 1) == 0, 'all') );
+                assert( all(dBodiesAttDCM_RenderFrameFromOF(:,:,1) == eye(3), 'all') )
     
             elseif kwargs.enumRenderingFrame == EnumRenderingFrame.CUSTOM_FRAME
                 % No check, assume inputs are already in place
@@ -1051,17 +1133,17 @@ classdef BlenderPyCommManager < CommManager
             end
 
             % Convert all attitude matrices to quaternions used by Blender
-            dSunQuaternion_OFfromNavFrame    = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_NavFrame);
+            dSunQuaternion_OFfromNavFrame    = BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_RenderFrame);
                 
             if kwargs.bConvertCamQuatToBlenderQuat
 
                 % Transpose DCM to adjust to Blender rotation definition of DCM (TBC) and transform to Quat
                 dCameraBlendQuaternion_OFfromNavFrame = BlenderPyCommManager.convertCamQuatToBlenderQuatStatic(...
-                    DCM2quat( transpose( dCameraAttDCM_NavframeFromOF ) , false) );
+                    DCM2quat( transpose( dCameraAttDCM_RenderFrameFromOF ) , false) );
             
             else
                 % DEVNOTE: ACHTUNG: Blender require attitude matrix to be defined from NavFrame TO OF!
-                dCameraBlendQuaternion_OFfromNavFrame = DCM2quat(transpose(dCameraAttDCM_NavframeFromOF), false);
+                dCameraBlendQuaternion_OFfromNavFrame = DCM2quat(transpose(dCameraAttDCM_RenderFrameFromOF), false);
             end
             
             dBodiesQuaternion_OFfromNavFrame = zeros(4, ui32NumOfBodies);
@@ -1070,7 +1152,7 @@ classdef BlenderPyCommManager < CommManager
                 % DEVNOTE: the quaternion corresponding to the matrix NavFrameFromTF must be first
                 % transposed to be the one required by Blender due to the convention for its/my definition
                 % of rotation matrices.
-                dBodiesQuaternion_OFfromNavFrame(:, idB) = transpose( DCM2quat(transpose( dBodiesAttDCM_NavFrameFromOF ) , false) ) ;
+                dBodiesQuaternion_OFfromNavFrame(:, idB) = transpose( DCM2quat(transpose( dBodiesAttDCM_RenderFrameFromOF ) , false) ) ;
 
             end
 
@@ -1078,16 +1160,16 @@ classdef BlenderPyCommManager < CommManager
             dSceneDataVector = zeros(1, 14 + ui32NumOfBodies * 7);
             
             % Allocate Sun PQ
-            dSceneDataVector(1:7) = [dSunVector_NavFrame; dSunQuaternion_OFfromNavFrame];
+            dSceneDataVector(1:7) = [dSunVector_RenderFrame; dSunQuaternion_OFfromNavFrame];
             % Allocate Camera PQ
-            dSceneDataVector(8:14) = [dCameraOrigin_NavFrame; dCameraBlendQuaternion_OFfromNavFrame];
+            dSceneDataVector(8:14) = [dCameraOrigin_RenderFrame; dCameraBlendQuaternion_OFfromNavFrame];
 
             % Allocate bodies PQ
             ui32bodiesAllocPtr = uint32(15);
             ui32DeltaPQ = uint32(7);
 
             for idB = 1:ui32NumOfBodies
-                dSceneDataVector(ui32bodiesAllocPtr : ui32bodiesAllocPtr + 6) = [dBodiesOrigin_NavFrame(1:3, idB); dBodiesQuaternion_OFfromNavFrame(1:4, idB)];
+                dSceneDataVector(ui32bodiesAllocPtr : ui32bodiesAllocPtr + 6) = [dBodiesOrigin_RenderFrame(1:3, idB); dBodiesQuaternion_OFfromNavFrame(1:4, idB)];
                 ui32bodiesAllocPtr = ui32bodiesAllocPtr + ui32DeltaPQ;
             end
 
@@ -1242,82 +1324,90 @@ classdef BlenderPyCommManager < CommManager
 
     methods (Static, Access = public)
         
-        function [dSunVector_NavFrame, dCameraOrigin_NavFrame, ...
-                dCameraAttDCM_NavframeFromOF, dBodiesOrigin_NavFrame, ...
-                dBodiesAttDCM_NavFrameFromOF] = ConvertSceneToBodyFixedFrame(dSunVector_NavFrame, ...
-                                                                            dCameraOrigin_NavFrame, ...
-                                                                            dCameraAttDCM_NavframeFromOF, ...
-                                                                            dBodiesOrigin_NavFrame, ...
-                                                                            dBodiesAttDCM_NavFrameFromOF, ...
+        function [dSunVector_RenderFrame, dCameraOrigin_RenderFrame, ...
+                dCameraAttDCM_RenderFrameFromOF, dBodiesOrigin_RenderFrame, ...
+                dBodiesAttDCM_RenderFrameFromOF] = ConvertSceneToBodyFixedFrame(dSunVector_RenderFrame, ...
+                                                                            dCameraOrigin_RenderFrame, ...
+                                                                            dCameraAttDCM_RenderFrameFromOF, ...
+                                                                            dBodiesOrigin_RenderFrame, ...
+                                                                            dBodiesAttDCM_RenderFrameFromOF, ...
                                                                             ui32TargetBodyID)
             arguments
-                dSunVector_NavFrame             (3,1)   double {isvector, isnumeric}
-                dCameraOrigin_NavFrame          (3,1)   double {isvector, isnumeric}
-                dCameraAttDCM_NavframeFromOF    (3,3)   double {ismatrix, isnumeric}
-                dBodiesOrigin_NavFrame          (3,:)   double {ismatrix, isnumeric}
-                dBodiesAttDCM_NavFrameFromOF    (3,3,:) double {ismatrix, isnumeric} 
+                dSunVector_RenderFrame             (3,1)   double {isvector, isnumeric}
+                dCameraOrigin_RenderFrame          (3,1)   double {isvector, isnumeric}
+                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {ismatrix, isnumeric}
+                dBodiesOrigin_RenderFrame          (3,:)   double {ismatrix, isnumeric}
+                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {ismatrix, isnumeric} 
                 ui32TargetBodyID                (1,1) uint32 {isscalar, isnumeric} = 1
             end
             
-            assert(size(dBodiesOrigin_NavFrame,2) <= ui32TargetBodyID && ui32TargetBodyID > 0, 'Invalid target body index!')
+            assert(size(dBodiesOrigin_RenderFrame,2) <= ui32TargetBodyID && ui32TargetBodyID > 0, 'Invalid target body index!')
 
             % Roto-translation pose to apply
-            dNewOriginPosition_NavFrame         = dBodiesOrigin_NavFrame(:, ui32TargetBodyID);
-            dNewFrameDCM_NewFrameFromNavFrame   = transpose( dBodiesAttDCM_NavFrameFromOF(:, :, ui32TargetBodyID) );
+            dNewOriginPosition_RenderFrame         = dBodiesOrigin_RenderFrame(:, ui32TargetBodyID);
+            dNewFrameDCM_NewFrameFromNavFrame   = transpose( dBodiesAttDCM_RenderFrameFromOF(:, :, ui32TargetBodyID) );
 
             % Set target pose to Identity.
-            dBodiesOrigin_NavFrame(:, ui32TargetBodyID) = zeros(3,ui32TargetBodyID);
-            dBodiesAttDCM_NavFrameFromOF(:,:, ui32TargetBodyID) = eye(3);
+            dBodiesOrigin_RenderFrame(:, ui32TargetBodyID) = zeros(3,ui32TargetBodyID);
+            dBodiesAttDCM_RenderFrameFromOF(:,:, ui32TargetBodyID) = eye(3);
 
             % Roto-translate camera pose
-            dCameraOrigin_NavFrame       = dNewFrameDCM_NewFrameFromNavFrame * (dCameraOrigin_NavFrame - dNewOriginPosition_NavFrame);
-            dCameraAttDCM_NavframeFromOF = dNewFrameDCM_NewFrameFromNavFrame * dCameraAttDCM_NavframeFromOF;
+            dCameraOrigin_RenderFrame       = dNewFrameDCM_NewFrameFromNavFrame * (dCameraOrigin_RenderFrame - dNewOriginPosition_RenderFrame);
+            dCameraAttDCM_RenderFrameFromOF = dNewFrameDCM_NewFrameFromNavFrame * dCameraAttDCM_RenderFrameFromOF;
 
             % Roto-translate Sun position
-            dSunVector_NavFrame = dNewFrameDCM_NewFrameFromNavFrame * (dSunVector_NavFrame - dNewOriginPosition_NavFrame);
+            dSunVector_RenderFrame = dNewFrameDCM_NewFrameFromNavFrame * (dSunVector_RenderFrame - dNewOriginPosition_RenderFrame);
 
             % Roto-translate bodies poses
-            for idB = 1:size(dBodiesOrigin_NavFrame, 2)
+            for idB = 1:size(dBodiesOrigin_RenderFrame, 2)
                 
                 if idB ~= ui32TargetBodyID
-                    dBodiesOrigin_NavFrame(:, idB) = dNewFrameDCM_NewFrameFromNavFrame * (dBodiesOrigin_NavFrame(:, idB) - dNewOriginPosition_NavFrame);
-                    dBodiesAttDCM_NavFrameFromOF(:,:,idB) = dNewFrameDCM_NewFrameFromNavFrame * dBodiesAttDCM_NavFrameFromOF(:,:,idB);
+                    dBodiesOrigin_RenderFrame(:, idB) = dNewFrameDCM_NewFrameFromNavFrame * (dBodiesOrigin_RenderFrame(:, idB) - dNewOriginPosition_RenderFrame);
+                    dBodiesAttDCM_RenderFrameFromOF(:,:,idB) = dNewFrameDCM_NewFrameFromNavFrame * dBodiesAttDCM_RenderFrameFromOF(:,:,idB);
                 end
             end
 
         end
 
-        function [dSunBlenderQuat_OFfromNavFrame, dSunDCM_OFfromNavFrame] = computeSunBlenderQuatFromPosition(dSunPositionArray_NavFrame)
+        function [dSunBlenderQuat_OFfromNavFrame, dSunDCM_OFfromNavFrame] = computeSunBlenderQuatFromPosition(dSunPositionArray_RenderFrame)
             arguments
-                dSunPositionArray_NavFrame (3,:) double {isvector, isnumeric}
+                dSunPositionArray_RenderFrame (3,:) double {isvector, isnumeric}
             end
             % Function to construct quaternion determining Sun direction as required by Blender, from position
             % NOTE: quaternion must be the one corresponding to the DCM from NavFrame (World) to "Sun frame"
 
-            ui32NumOfQuats = size(dSunPositionArray_NavFrame, 2);
+            ui32NumOfQuats = size(dSunPositionArray_RenderFrame, 2);
             dSunBlenderQuat_OFfromNavFrame = zeros(4, ui32NumOfQuats);
             dSunDCM_OFfromNavFrame = zeros(3, 3, ui32NumOfQuats);
 
             % Compute unit direction
-            dUnitVectorToSunArray = dSunPositionArray_NavFrame./vecnorm(dSunPositionArray_NavFrame, 2, 1);
+            dUnitVectorToSunArray = dSunPositionArray_RenderFrame./vecnorm(dSunPositionArray_RenderFrame, 2, 1);
         
             % Compute Z axis in NavFrame
-            dZaxisArray_NavFrame = dUnitVectorToSunArray;
-            dAuxVectorArray_NavFrame =  repmat([1; 0; 0], 1, ui32NumOfQuats); % Auxiliary vector, can be arbitrary not aligned
-            
+            dZaxisArray_RenderFrame = dUnitVectorToSunArray;
+
+            if all(dZaxisArray_RenderFrame == [1; 0; 0]) == true
+                dAuxVectorArray_RenderFrame =  repmat(randn(3,1), 1, ui32NumOfQuats); % Auxiliary vector, can be arbitrary not aligned
+                dAuxVectorArray_RenderFrame = dAuxVectorArray_RenderFrame./vecnorm(dAuxVectorArray_RenderFrame, 2, 1);
+            else
+                dAuxVectorArray_RenderFrame =  repmat([1; 0; 0], 1, ui32NumOfQuats); % Auxiliary vector, can be arbitrary not aligned
+            end
+
             % Compute X axis in NavFrame
-            dXaxisArray_NavFrame = cross(dAuxVectorArray_NavFrame, dZaxisArray_NavFrame);
-            dXaxisArray_NavFrame = dXaxisArray_NavFrame ./ vecnorm(dXaxisArray_NavFrame, 2, 1);
+            dXaxisArray_RenderFrame = cross(dAuxVectorArray_RenderFrame, dZaxisArray_RenderFrame);
+            dXaxisArray_RenderFrame = dXaxisArray_RenderFrame ./ vecnorm(dXaxisArray_RenderFrame, 2, 1);
+
+            assert(not(any(isnan(dXaxisArray_RenderFrame))), 'ERROR: failed to define Sun quaternion: nan detected.')
 
             % Compute Y axis in NavFrame
-            dYaxisArray_NavFrame = cross(dZaxisArray_NavFrame, dXaxisArray_NavFrame);
+            dYaxisArray_RenderFrame = cross(dZaxisArray_RenderFrame, dXaxisArray_RenderFrame);
 
             for idR = 1:ui32NumOfQuats
 
                 % Construct DCM ( TODO: validate matrix)
                 % NOTE: matrix has axes of OF frame expressed in NavFrame as rows, such that dot product
                 % on each project a vector from NavFrame basis to OF basis.
-                dSunDCM_OFfromNavFrame(:,:, idR) = [dXaxisArray_NavFrame(:,idR)'; dYaxisArray_NavFrame(:,idR)'; dZaxisArray_NavFrame(:,idR)']; 
+                dSunDCM_OFfromNavFrame(:,:, idR) = [dXaxisArray_RenderFrame(:,idR)'; dYaxisArray_RenderFrame(:,idR)'; dZaxisArray_RenderFrame(:,idR)']; 
 
                 % Convert to quaternion
                 dSunBlenderQuat_OFfromNavFrame(1:4, idR) = DCM2quat( dSunDCM_OFfromNavFrame(:,:, idR), false); 

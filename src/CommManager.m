@@ -55,6 +55,7 @@ classdef CommManager < handle
         charConfigYamlFilename = ""
         strConfigFromYaml       {isstruct} = struct()
 
+        bDEBUG_MODE
         charServerAddress
         ui32ServerPort          {isnumeric}
         dCommTimeout
