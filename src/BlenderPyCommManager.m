@@ -88,6 +88,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false;
                 kwargs.bDEBUG_MODE                      (1,1) logical       {islogical, isscalar} = false;
                 kwargs.objShapeModel                     = []
+                kwargs.charDatasetFolder                (1,:) string {mustBeA(kwargs.charDatasetFolder, ["string", "char"])} = ""
             end
 
             bIsValidServerAutoManegementConfig = false;
@@ -154,21 +155,44 @@ classdef BlenderPyCommManager < CommManager
             
             self.bAutomaticConvertToTargetFixed = kwargs.bAutomaticConvertToTargetFixed;
 
+            % Parse yaml configuration file if provided
+            if not(strcmpi(kwargs.charConfigYamlFilename, ""))
+
+                % Read data from yaml file used server side
+                self.parseYamlConfig_(kwargs.charConfigYamlFilename);
+                self.charOutputPath = self.strConfigFromYaml.Server_params.output_path;
+                
+                if not(strcmpi(kwargs.charDatasetFolder, ""))
+
+                    % Set output path if user provided it 
+                    self.charOutputPath = kwargs.charDatasetFolder;
+
+                    % Update output path if server is not running yet
+                    if bIsValidServerAutoManegementConfig || self.checkRunningBlenderServer()
+
+                        self.strConfigFromYaml.Server_params.output_path = self.charOutputPath;
+                        
+                        % Configure file overwriting from template
+                        [charRootDir, charFilename, charExt] = fileparts(kwargs.charConfigYamlFilename);
+                        if contains(charFilename, ".templ")
+                            charFilename = strrep(charFilename, ".templ", "");
+                        end
+                        kwargs.charConfigYamlFilename = fullfile(charRootDir, strcat(charFilename, ".yml") );
+                        self.serializeYamlConfig_(kwargs.charConfigYamlFilename, self.strConfigFromYaml);
+                    
+                    end
+
+                    % TODO: in next version make the class able to rewrite yaml after loading such that
+                    % parameters can be updated. In Linux, order of operations (first modify, then start server)
+                    % with automatic management can be leveraged to make everything seamless.
+                end
+
+            end
+
             % Start server if in auto management mode
             if bIsValidServerAutoManegementConfig
                 % TODO: add storage of PID to ensure only that process will be killed!
                 [self.bIsServerRunning] = self.startBlenderServer();
-            end
-
-            % Parse yaml configuration file if provided
-            if not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                self.parseYamlConfig_(kwargs.charConfigYamlFilename);
-
-                % Set output path by reading it from yaml
-                self.charOutputPath = self.strConfigFromYaml.Server_params.output_path;
-                % TODO: in next version make the class able to rewrite yaml after loading such that
-                % parameters can be updated. In Linux, order of operations (first modify, then start server)
-                % with automatic management can be leveraged to make everything seamless.
             end
 
             % Determine transmission dtype

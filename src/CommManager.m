@@ -436,7 +436,7 @@ classdef CommManager < handle
             [~, ~, charExt] = fileparts(charConfigYamlFilename);
 
             if strcmpi(charExt, "")
-                charConfigYamlFilename = strcat(charConfigYamlFilename, ".yaml");
+                charConfigYamlFilename = strcat(charConfigYamlFilename, ".yml");
             end
 
             % Store path to yaml file
@@ -445,6 +445,11 @@ classdef CommManager < handle
             % Load file using yaml community library
             self.strConfigFromYaml = yaml.loadFile(charConfigYamlFilename);
 
+        end
+
+        function self = serializeYamlConfig_(self, charConfigYamlFilename, strData)
+            % Write data to yaml file
+            yaml.dumpFile(charConfigYamlFilename, strData, "block");
         end
     end
 
