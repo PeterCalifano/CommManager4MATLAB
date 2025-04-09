@@ -35,7 +35,7 @@ classdef BlenderPyCommManager < CommManager
         % ui32ServerPort % Get from yaml if specified else from input % Defined in superclass
         
         % Configuration
-        bSendLogToShellPipe                 (1,1) logical {islogical, isscalar} = false % FIXME, not working is true due to system call failure
+        bUseTmuxShell                       (1,1) logical {islogical, isscalar} = true 
 
         charBlenderModelPath                (1,1) string {mustBeA(charBlenderModelPath, ["string", "char"])}
         charBlenderPyInterfacePath          (1,1) string {mustBeA(charBlenderPyInterfacePath, ["string", "char"])}  
@@ -84,7 +84,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.charBlenderPyInterfacePath       (1,:) string        {mustBeA(kwargs.charBlenderPyInterfacePath , ["string", "char"])} = ""
                 kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
-                kwargs.bSendLogToShellPipe              (1,1) logical       {islogical, isscalar} = false;
+                kwargs.bUseTmuxShell              (1,1) logical       {islogical, isscalar} = false;
                 kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false;
                 kwargs.bDEBUG_MODE                      (1,1) logical       {islogical, isscalar} = false;
                 kwargs.objShapeModel                     = []
@@ -151,7 +151,7 @@ classdef BlenderPyCommManager < CommManager
             self.charBlenderPyInterfacePath = kwargs.charBlenderPyInterfacePath;
             self.bIsValidServerAutoManegementConfig = bIsValidServerAutoManegementConfig;
             self.ui32ServerPort = ui32ServerPort;
-            self.bSendLogToShellPipe = kwargs.bSendLogToShellPipe;
+            self.bUseTmuxShell = kwargs.bUseTmuxShell;
             
             self.bAutomaticConvertToTargetFixed = kwargs.bAutomaticConvertToTargetFixed;
 
@@ -168,15 +168,22 @@ classdef BlenderPyCommManager < CommManager
                     self.charOutputPath = kwargs.charDatasetFolder;
 
                     % Update output path if server is not running yet
-                    if bIsValidServerAutoManegementConfig || self.checkRunningBlenderServer()
-
+                    if bIsValidServerAutoManegementConfig || not(self.checkRunningBlenderServer())
+                    
+                        % Write output path and server ports configuration
                         self.strConfigFromYaml.Server_params.output_path = self.charOutputPath;
-                        
+                        self.strConfigFromYaml.Server_params.port_B2M = int32(ui32ServerPort(1));
+
+                        if kwargs.ui32TargetPort > 0
+                            self.strConfigFromYaml.Server_params.port_M2B = int32(kwargs.ui32TargetPort);
+                        end
+
                         % Configure file overwriting from template
-                        [charRootDir, charFilename, charExt] = fileparts(kwargs.charConfigYamlFilename);
+                        [charRootDir, charFilename, ~] = fileparts(kwargs.charConfigYamlFilename);
                         if contains(charFilename, ".templ")
                             charFilename = strrep(charFilename, ".templ", "");
                         end
+
                         kwargs.charConfigYamlFilename = fullfile(charRootDir, strcat(charFilename, ".yml") );
                         self.serializeYamlConfig_(kwargs.charConfigYamlFilename, self.strConfigFromYaml);
                     
@@ -800,7 +807,7 @@ classdef BlenderPyCommManager < CommManager
             [bIsServerRunning] = BlenderPyCommManager.startBlenderServerStatic(self.charBlenderModelPath, ...
                                                                              self.charBlenderPyInterfacePath, ...
                                                                              self.charStartBlenderServerCallerPath, ...
-                                                                             self.bSendLogToShellPipe, ...
+                                                                             self.bUseTmuxShell, ...
                                                                              self.ui32ServerPort(1), ...
                                                                              self.bIsValidServerAutoManegementConfig);
 
@@ -827,7 +834,7 @@ classdef BlenderPyCommManager < CommManager
                     self.charStartBlenderServerCallerPath, self.charBlenderModelPath, self.charBlenderPyInterfacePath);
 
                 % Logging options
-                if self.bSendLogToShellPipe == true
+                if self.bUseTmuxShell == true
                     system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
                     charStartBlenderCommand = char(strcat(charStartBlenderCommand, " > /tmp/blender_pipe &"));
                 else
@@ -962,14 +969,14 @@ classdef BlenderPyCommManager < CommManager
         function [bIsServerRunning] = startBlenderServerStatic(charBlenderModelPath, ...
                                                                charBlenderPyInterfacePath, ...
                                                                charStartBlenderServerCallerPath, ...
-                                                               bSendLogToShellPipe, ...
+                                                               bUseTmuxShell, ...
                                                                ui32NetworkPortToCheck, ...
                                                                bIsValidServerAutoManegementConfig)
             arguments
                 charBlenderModelPath                    
                 charBlenderPyInterfacePath            
                 charStartBlenderServerCallerPath
-                bSendLogToShellPipe                     
+                bUseTmuxShell                     
                 ui32NetworkPortToCheck                  (1,1) uint32 {isnumeric, isscalar} = 51001        
                 bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
             end
@@ -1006,10 +1013,12 @@ classdef BlenderPyCommManager < CommManager
                         charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
 
                     % Logging options
-                    if bSendLogToShellPipe == true
-                        system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
-                        charStartBlenderCommand = char(strcat(charStartBlenderCommand, " > /tmp/blender_pipe &"));
-                        charLogPipePath = "Logging to pipe: /tmp/blender_pipe";
+
+                    if bUseTmuxShell == true
+                                           
+                        % system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
+                        charStartBlenderCommand = char(sprintf("tmux new-session -d -s bpy_render '%s; exec bash'", charStartBlenderCommand));
+                        charLogPipePath = "Using new tmux session: bpy_render";
                     else
                         charStartBlenderCommand = char(strcat(charStartBlenderCommand, " &"));
                         charLogPipePath = "Log disabled.";
@@ -1017,13 +1026,23 @@ classdef BlenderPyCommManager < CommManager
 
                     % Execute the command
                     system(charStartBlenderCommand);
-                    pause(1.5); % Wait sockets instantiation
 
                     % Check server is running
-                    [bIsServerRunning] = BlenderPyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
+                    bIsServerRunning = false; 
+                    ui32MaxWaitCounter = 0;
+
+                    while not(bIsServerRunning) % Wait sockets instantiation
+                        [bIsServerRunning] = BlenderPyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
+                        pause(1);
+                        ui32MaxWaitCounter = ui32MaxWaitCounter + 1;
+
+                        if ui32MaxWaitCounter == 10
+                            error("\nMax wait time for server start reached. Command used: %s. Check log or tmux shell.", charStartBlenderCommand)
+                        end
+                    end
 
                     if not(bIsServerRunning)
-                        error("\nAttempt to start server using command: \t\n%s.\nHowever, the server did not started correctly. Check log if available.", charStartBlenderCommand)
+                        error("\nAttempt to start server using command: \t\n%s.\nHowever, the server did not started correctly. Check log or tmux shell.", charStartBlenderCommand)
                     end
 
                     fprintf(sprintf("DONE. %s \n", charLogPipePath));
