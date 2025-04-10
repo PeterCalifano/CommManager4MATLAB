@@ -41,6 +41,7 @@ classdef BlenderPyCommManager < CommManager
         charBlenderPyInterfacePath          (1,1) string {mustBeA(charBlenderPyInterfacePath, ["string", "char"])}  
         charStartBlenderServerCallerPath    (1,1) string {mustBeA(charStartBlenderServerCallerPath, ["string", "char"])}
         
+        charOutputDatatype              {mustBeMember(charOutputDatatype, ["double", "single", "uint8", "uint32", "uint16", "source"])} = "source";
         charOutputPath; % Currently read only, this cannot be set from MATLAB
         bAutomaticConvertToTargetFixed  (1,1) logical {islogical, isscalar} = false;
 
@@ -76,6 +77,8 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.dOutputDatagramSize              (1,1) double        {isscalar, isnumeric} = 512
                 kwargs.ui32TargetPort                   (1,1) uint32        {isscalar, isnumeric} = 0
                 kwargs.charTargetAddress                (1,:) string        {mustBeA(kwargs.charTargetAddress , ["string", "char"])} = "127.0.0.1"
+                kwargs.charOutputDatatype               (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"]), ...
+                                                                  mustBeMember(kwargs.charOutputDatatype, ["double", "single", "uint8", "uint32", "uint16", "source"])} = "source";
                 kwargs.i64RecvTCPsize                   (1,1) int64         {isscalar, isnumeric} = -1; % SPECIAL MODE: -5, -10 (auto compute)
                 kwargs.charConfigYamlFilename           (1,:) string        {mustBeA(kwargs.charConfigYamlFilename , ["string", "char"])}  = ""
                 kwargs.bAutoManageBlenderServer         (1,1) logical       {isscalar, islogical} = false
@@ -152,7 +155,8 @@ classdef BlenderPyCommManager < CommManager
             self.bIsValidServerAutoManegementConfig = bIsValidServerAutoManegementConfig;
             self.ui32ServerPort = ui32ServerPort;
             self.bUseTmuxShell = kwargs.bUseTmuxShell;
-            
+            self.charOutputDatatype = kwargs.charOutputDatatype;
+
             self.bAutomaticConvertToTargetFixed = kwargs.bAutomaticConvertToTargetFixed;
 
             % Parse yaml configuration file if provided
@@ -410,7 +414,8 @@ classdef BlenderPyCommManager < CommManager
             end
             arguments (Input)
                 kwargs.ui32TargetPort                   (1,1) uint32 {isscalar, isnumeric} = 0
-                kwargs.charOutputDatatype               (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"])} = "uint8"
+                kwargs.charOutputDatatype               (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"]), ...
+                                                           mustBeMember(kwargs.charOutputDatatype, ["double", "single", "uint8", "uint32", "uint16", "source"])} = self.charOutputDatatype
                 kwargs.ui32NumOfBodies                  (1,1) uint32 {isnumeric, isscalar} = 1
                 kwargs.objCameraIntrinsics              (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumRenderingFrame               (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
@@ -492,7 +497,7 @@ classdef BlenderPyCommManager < CommManager
             %    ui32NumOfImages, char( kwargs.charOutputDatatype) );
             
             % Placeholder for output images
-            outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), 1, kwargs.charOutputDatatype);
+            % outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), 1, kwargs.charOutputDatatype);
 
             % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_RenderFrame);
 
@@ -605,6 +610,11 @@ classdef BlenderPyCommManager < CommManager
 
                 % Store image into output array
                 %outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), %idImg) = cast(dImg, kwargs.charOutputDatatype);
+                
+                if strcmpi(kwargs.charOutputDatatype, "source")
+                    kwargs.charOutputDatatype = class(dImg);
+                end
+
                 outImgArrays = cast(dImg, kwargs.charOutputDatatype);
                 fprintf("Completed image %d of %d.\n", idImg, ui32NumOfImages)
 
