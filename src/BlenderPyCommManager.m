@@ -174,6 +174,22 @@ classdef BlenderPyCommManager < CommManager
                         self.strConfigFromYaml.Server_params.output_path = self.charOutputPath;
                         self.strConfigFromYaml.Server_params.port_B2M = int32(ui32ServerPort(1));
 
+                        if not(strcmpi(self.objShapeModel.charModelName, ""))
+
+                            try
+                                % Try to convert to enumTargetName as constraint
+                                enumTargetName = EnumScenarioName.(self.objShapeModel.charModelName);
+                                self.strConfigFromYaml.BlenderModel_params.bodies_names{1} = char(enumTargetName);
+
+                            catch ME
+                                fprintf(2, "Error occurred when assigning body name: %s. \nACHTUNG: model name in shape model object " + ...
+                                    "likely did not match any scenario in EnumScenarioName and may be incorrect. " + ...
+                                    "Make sure the blender model you're using contains that object!", ME.message);
+                                pause(1);
+                            end
+
+                        end
+
                         if kwargs.ui32TargetPort > 0
                             self.strConfigFromYaml.Server_params.port_M2B = int32(kwargs.ui32TargetPort);
                         end
@@ -492,7 +508,7 @@ classdef BlenderPyCommManager < CommManager
             %    ui32NumOfImages, char( kwargs.charOutputDatatype) );
             
             % Placeholder for output images
-            outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), 1, kwargs.charOutputDatatype);
+            % outImgArrays = zeros(objCameraIntrinsics_.ImageSize(2), objCameraIntrinsics_.ImageSize(1), 1, kwargs.charOutputDatatype);
 
             % BlenderPyCommManager.computeSunBlenderQuatFromPosition(dSunVector_RenderFrame);
 
@@ -605,6 +621,10 @@ classdef BlenderPyCommManager < CommManager
 
                 % Store image into output array
                 %outImgArrays(1:self.objCameraIntrinsics.ImageSize(2), 1:self.objCameraIntrinsics.ImageSize(1), %idImg) = cast(dImg, kwargs.charOutputDatatype);
+                if strcmpi(kwargs.charOutputDatatype, "source")
+                    kwargs.charOutputDatatype = class(dImg);
+                end
+
                 outImgArrays = cast(dImg, kwargs.charOutputDatatype);
                 fprintf("Completed image %d of %d.\n", idImg, ui32NumOfImages)
 
@@ -855,8 +875,7 @@ classdef BlenderPyCommManager < CommManager
                 fprintf("\nAuto managed mode is enabled. Attempting to terminate Blender processes automatically... \n")
             end
             % Call static termination method
-            % DEVTMP temporarily disable!
-            % BlenderPyCommManager.terminateBlenderProcessesStatic()
+            BlenderPyCommManager.terminateBlenderProcessesStatic({num2str(self.ui32ServerPID)})
         end
 
 
@@ -966,7 +985,7 @@ classdef BlenderPyCommManager < CommManager
     methods (Static, Access = public)
 
         % Method to start blender server
-        function [bIsServerRunning] = startBlenderServerStatic(charBlenderModelPath, ...
+        function [bIsServerRunning, ui32ServerPID] = startBlenderServerStatic(charBlenderModelPath, ...
                                                                charBlenderPyInterfacePath, ...
                                                                charStartBlenderServerCallerPath, ...
                                                                bUseTmuxShell, ...
@@ -1017,22 +1036,24 @@ classdef BlenderPyCommManager < CommManager
                     if bUseTmuxShell == true
                                            
                         % system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
-                        charStartBlenderCommand = char(sprintf("tmux new-session -d -s bpy_render '%s; exec bash'", charStartBlenderCommand));
+                        charStartBlenderCommand = char(sprintf("tmux new-session -d -s bpy_render '%s; exec bash' & echo $!", charStartBlenderCommand));
                         charLogPipePath = "Using new tmux session: bpy_render";
                     else
-                        charStartBlenderCommand = char(strcat(charStartBlenderCommand, " &"));
+                        charStartBlenderCommand = char(strcat(charStartBlenderCommand, " & echo $!"));
                         charLogPipePath = "Log disabled.";
                     end
 
                     % Execute the command
-                    system(charStartBlenderCommand);
+                    [ui32Status, charStdout] = system(charStartBlenderCommand);
+                    
 
                     % Check server is running
                     bIsServerRunning = false; 
                     ui32MaxWaitCounter = 0;
+                    ui32ServerPID = [];
 
                     while not(bIsServerRunning) % Wait sockets instantiation
-                        [bIsServerRunning] = BlenderPyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
+                        [bIsServerRunning, ui32ServerPID] = BlenderPyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
                         pause(1);
                         ui32MaxWaitCounter = ui32MaxWaitCounter + 1;
 
@@ -1043,6 +1064,14 @@ classdef BlenderPyCommManager < CommManager
 
                     if not(bIsServerRunning)
                         error("\nAttempt to start server using command: \t\n%s.\nHowever, the server did not started correctly. Check log or tmux shell.", charStartBlenderCommand)
+                    end
+
+                    if ui32Status == 0
+                        % Get PID of background process
+                        ui32ServerPID = str2double(strtrim(charStdout));
+                        fprintf('\nBlender server started, PID = %d\n', ui32ServerPID);
+                    else
+                        error('Something has gone wrong while starting server: system() return status mode %d.', ui32Status)
                     end
 
                     fprintf(sprintf("DONE. %s \n", charLogPipePath));
@@ -1063,46 +1092,77 @@ classdef BlenderPyCommManager < CommManager
         end
         
         % Method to check server status
-        function [bIsServerRunning] = checkRunningBlenderServerStatic(ui32NetworkPort)
+        function [bIsServerRunning, ui32ServerPID] = checkRunningBlenderServerStatic(ui32NetworkPort)
             arguments
                 ui32NetworkPort (1,1) uint32 {isnumeric, isscalar}
             end
 
             if BlenderPyCommManager.checkUnix_()
-                % TODO
                 % ui32BlenderRecvPort % Required in self
 
-                [~, netstat_out] = system(sprintf('netstat -tulpnv | grep %d', ui32NetworkPort)); % Get the process ID(s) of blender
-                % Check if port in output message
-                if contains(netstat_out, sprintf("%d", ui32NetworkPort))
-                    bIsServerRunning = true;
-                else
-                    bIsServerRunning = false;
+                charCMD = sprintf( [ ...
+                    'netstat -tulpnv ', ...
+                    '| grep LISTEN ', ...
+                    '| grep %d ', ...
+                    '| awk ''{print $7}'' ', ...
+                    '| grep /blender$ ', ...
+                    '| cut -d/ -f1' ], ui32NetworkPort );
+
+                [~, charNetstatOutMsg] = system(sprintf('netstat -tulpnv | grep LISTEN | grep %d', ui32NetworkPort)); % Get the process ID(s) of blender
+                [~, charNetstatOutPIDs] = system(charCMD); % Get the process ID(s) of blender
+
+                % Fetch process ID associated to the server
+
+                % 2) Trim whitespace and keep only lines that are *all* digits
+                charOutPIDlines = splitlines(charNetstatOutPIDs);
+                ui32ServerPID = [];
+                for id = 1:numel(charOutPIDlines)
+
+                    charPID = strtrim(charOutPIDlines{id});
+
+                    if ~isempty(charPID) && all(isstrprop(charPID, 'digit'))
+                        ui32ServerPID(end+1) = str2double(charPID);  %#ok<AGROW>
+                    end
                 end
 
+                % Check if port in output message
+                if contains(charNetstatOutMsg, sprintf("%d", ui32NetworkPort)) && not(isempty(ui32ServerPID))
+                    bIsServerRunning = true;
+                    fprintf('Blender PID(s) on port %d: %s\n', ui32NetworkPort, mat2str(ui32ServerPID));
+                else
+                    bIsServerRunning = false;
+                    warning('No Blender PID found on port %d.', ui32NetworkPort);
+                end
             end
 
         end
         
         % Method to terminate server if running
-        function [] = terminateBlenderProcessesStatic()
+        function [] = terminateBlenderProcessesStatic(cellPIDs)
+            arguments
+                cellPIDs {iscell} = {}
+            end
 
             if BlenderPyCommManager.checkUnix_()
 
-                % Find the process
-                [~, charResult] = system('pgrep -f blender'); % Get the process ID(s) of blender
-
-                % Trim whitespace
-                charResult = strtrim(charResult);
-
                 % Split the PIDs into a cell array of strings
-                pids = strsplit(charResult);
+                if iscell(cellPIDs) && not(isempty(cellPIDs))
+                    cellPIDs_ = cellPIDs;
+                else
+                    % Find all blender processes and kill all
+                    [~, charResultingPIDs] = system('pgrep -f blender'); % Get the process ID(s) of blender
 
-                if not(isempty(charResult))
+                    % Trim whitespaces
+                    charResultingPIDs = strtrim(charResultingPIDs);
+                    cellPIDs_ = strsplit(charResultingPIDs);
+                end
+
+                if not(isempty(cellPIDs_))
                     % Kill the process
-                    for pid = pids
-                        fprintf('Killing process %s...\n', pid{:})
-                        % system(sprintf('kill -9 %s', pid{:}));
+                    for cellPID = cellPIDs_
+                        fprintf('Killing process %s...', cellPID{:})
+                        [bFlag] = system(sprintf('kill -9 %s', cellPID{:}));
+                        fprintf(' status flag: %s\n', bFlag);
                     end
                 end
 
