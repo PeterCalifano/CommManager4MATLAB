@@ -18,6 +18,8 @@ classdef BlenderPyCommManager < CommManager
     %                                   configuration and communication handling. Render methods tested.
     % 11-02-2025    Pietro Califano     Minor bug fixes, implementation of methods to compute attitude as
     %                                   required by Blender, extensive testing for release version.
+    % 10-05-2025    Pietro Califano     Review of major upgrades (validation of output using internal 
+    %                                   shape model and frontend emulator, yaml configuration update)
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
@@ -27,7 +29,6 @@ classdef BlenderPyCommManager < CommManager
     % [-]
     % -------------------------------------------------------------------------------------------------------------
     %% Function code
-
 
     properties (SetAccess = protected, GetAccess = public)
         
@@ -63,7 +64,7 @@ classdef BlenderPyCommManager < CommManager
     %% PUBLIC methods
     methods (Access = public)
         % CONSTRUCTOR
-        function self = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
+        function self = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs, settings)
             arguments
                 charServerAddress (1,:) {ischar, isstring}              = "127.0.0.1" % Assumes localhost
                 ui32ServerPort    (1,2) uint32  {isvector, isnumeric}   = [30001, 51000]; % [TCP, UDP] Assumes ports used by BlenderPy interface
@@ -87,11 +88,18 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.charBlenderPyInterfacePath       (1,:) string        {mustBeA(kwargs.charBlenderPyInterfacePath , ["string", "char"])} = ""
                 kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
-                kwargs.bUseTmuxShell              (1,1) logical       {islogical, isscalar} = false;
+                kwargs.bUseTmuxShell                    (1,1) logical       {islogical, isscalar} = false;
                 kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false;
                 kwargs.bDEBUG_MODE                      (1,1) logical       {islogical, isscalar} = false;
                 kwargs.objShapeModel                     = []
-                kwargs.charDatasetFolder                (1,:) string {mustBeA(kwargs.charDatasetFolder, ["string", "char"])} = ""
+                kwargs.charDatasetSaveFolder            (1,:) string {mustBeA(kwargs.charDatasetSaveFolder, ["string", "char"])} = ""
+            end
+            arguments
+                settings.enumImgBitDepth                (1,1) string {mustBeMember(settings.enumImgBitDepth, ["8", "16", "32"]), ...
+                                                                        mustBeA(settings.enumImgBitDepth, ["string", "char"])} = "8"
+                settings.enumOutputImgFormat            (1,1) string {mustBeMember(settings.enumOutputImgFormat, ["PNG", "OPEN_EXR"]), ...
+                                                                mustBeA(settings.enumOutputImgFormat, ["string", "char"])} = "PNG"
+                settings.bSaveGeomVisibilityBoolMask    (1,1) logical {islogical} = false
             end
 
             bIsValidServerAutoManegementConfig = false;
@@ -166,10 +174,22 @@ classdef BlenderPyCommManager < CommManager
                 self.parseYamlConfig_(kwargs.charConfigYamlFilename);
                 self.charOutputPath = self.strConfigFromYaml.Server_params.output_path;
                 
-                if not(strcmpi(kwargs.charDatasetFolder, ""))
+                if not(strcmpi(kwargs.charDatasetSaveFolder, ""))
+
+                    % Check if last folder is "images", modify path if not
+                    [charRoot, charDirName] = fileparts(kwargs.charDatasetSaveFolder);
+            
+                    if not(strcmpi(charDirName, "images"))
+                        % No "images" folder: append to path
+                        kwargs.charDatasetSaveFolder = fullfile(kwargs.charDatasetSaveFolder, "images");
+
+                    elseif strcmpi(charDirName, "images") && not(strcmp(charDirName, "images"))
+                        % "images" is present, but wrong case, overwrite
+                        kwargs.charDatasetSaveFolder = fullfile(charRoot, "images");
+                    end
 
                     % Set output path if user provided it 
-                    self.charOutputPath = kwargs.charDatasetFolder;
+                    self.charOutputPath = kwargs.charDatasetSaveFolder;
 
                     % Update output path if server is not running yet
                     if bIsValidServerAutoManegementConfig || not(self.checkRunningBlenderServer())
@@ -203,7 +223,18 @@ classdef BlenderPyCommManager < CommManager
                         if contains(charFilename, ".templ")
                             charFilename = strrep(charFilename, ".templ", "");
                         end
+                        
+                        % Write bit encoding and output format to config
+                        if strcmpi(settings.enumOutputImgFormat, "open_exr") && str2double(settings.enumImgBitDepth) < 16
+                            warning('OPEN_EXR image output format supports either 16 or 32 bit FP output. Changed to FP16.')
+                            settings.enumImgBitDepth = "16";
+                        end
 
+                        self.strConfigFromYaml.Camera_params.bit_encoding                          = int32(str2double(settings.enumImgBitDepth));
+                        self.strConfigFromYaml.RenderingEngine_params.file_format                  = settings.enumOutputImgFormat;
+                        self.strConfigFromYaml.RenderingEngine_params.bSaveGeomVisibilityBoolMask  = settings.bSaveGeomVisibilityBoolMask;
+                        
+                        % Complete configuration and serialize file
                         kwargs.charConfigYamlFilename = fullfile(charRootDir, strcat(charFilename, ".yml") );
                         self.serializeYamlConfig_(kwargs.charConfigYamlFilename, self.strConfigFromYaml);
                     
