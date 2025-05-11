@@ -889,12 +889,10 @@ classdef BlenderPyCommManager < CommManager
                 charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
                     self.charStartBlenderServerCallerPath, self.charBlenderModelPath, self.charBlenderPyInterfacePath);
 
-                % Logging options
-                if self.bUseTmuxShell == true
-                    system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
-                    charStartBlenderCommand = char(strcat(charStartBlenderCommand, " > /tmp/blender_pipe &"));
-                else
-                    charStartBlenderCommand = char(strcat(charStartBlenderCommand, " &"));
+                if self.bUseTmuxShell
+                    % Logging options
+                    charStartBlenderCommand = char(sprintf("tmux new-session -d -s %s '%s; exec bash' & echo $!",...
+                        strcat("bpy_", num2str(self.ui32ServerPort(1)), "_render"), charStartBlenderCommand)) ;
                 end
 
         end
@@ -1028,12 +1026,12 @@ classdef BlenderPyCommManager < CommManager
                                                                ui32NetworkPortToCheck, ...
                                                                bIsValidServerAutoManegementConfig)
             arguments
-                charBlenderModelPath                    
-                charBlenderPyInterfacePath            
-                charStartBlenderServerCallerPath
-                bUseTmuxShell                     
-                ui32NetworkPortToCheck                  (1,1) uint32 {isnumeric, isscalar} = 51001        
-                bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
+                charBlenderModelPath                            string {mustBeA(charBlenderModelPath             , ["string", "char"])}        
+                charBlenderPyInterfacePath                      string {mustBeA(charBlenderPyInterfacePath       , ["string", "char"])}      
+                charStartBlenderServerCallerPath                string {mustBeA(charStartBlenderServerCallerPath , ["string", "char"])}
+                bUseTmuxShell                           (1,1)   logical {islogical, isscalar} = true
+                ui32NetworkPortToCheck                  (1,1)   uint32 {isnumeric, isscalar} = 51001        
+                bIsValidServerAutoManegementConfig      (1,1)   logical {islogical, isscalar} = false
             end
 
             bIsServerRunning = false;
@@ -1060,7 +1058,7 @@ classdef BlenderPyCommManager < CommManager
 
                 try
                     if bIsValidServerAutoManegementConfig
-                        fprintf("\nAuto managed mode is enabled. Attempting to start Blender server automatically... ")
+                        fprintf("\nAuto managed mode is enabled. Attempting to start Blender server automagically... \n")
                     end
 
                     % Construct command to run
@@ -1072,8 +1070,13 @@ classdef BlenderPyCommManager < CommManager
                     if bUseTmuxShell == true
                                            
                         % system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
-                        charStartBlenderCommand = char(sprintf("tmux new-session -d -s bpy_render '%s; exec bash' & echo $!", charStartBlenderCommand));
-                        charLogPipePath = "Using new tmux session: bpy_render";
+                        charTmuxSessionName = strcat("bpy", num2str(ui32NetworkPortToCheck), "_render");
+
+                        charStartBlenderCommand = char(sprintf("tmux new-session -d -s %s '%s; exec bash' & echo $!",...
+                                                charTmuxSessionName, charStartBlenderCommand)) ;
+
+                        charLogPipePath = sprintf("Using new tmux session: %s", charTmuxSessionName);
+                        
                     else
                         charStartBlenderCommand = char(strcat(charStartBlenderCommand, " & echo $!"));
                         charLogPipePath = "Log disabled.";
@@ -1089,6 +1092,7 @@ classdef BlenderPyCommManager < CommManager
                     ui32ServerPID = [];
 
                     while not(bIsServerRunning) % Wait sockets instantiation
+                        fprintf("\nChecking Blender server availability...")
                         [bIsServerRunning, ui32ServerPID] = BlenderPyCommManager.checkRunningBlenderServerStatic(ui32NetworkPortToCheck);
                         pause(1);
                         ui32MaxWaitCounter = ui32MaxWaitCounter + 1;
@@ -1626,6 +1630,35 @@ classdef BlenderPyCommManager < CommManager
                 error('\n Not implemented yet \n')
             end
         end
+    
+        % Method to compose command to manually start server with provided paths
+        function [charStartBlenderCommand] = GetBlenderStartCommandStatic(charBlenderModelPath, ...
+                                                                        charBlenderPyInterfacePath, ...
+                                                                        charStartBlenderServerCallerPath, ...
+                                                                        ui32ServerPort, ...
+                                                                        bUseTmuxShell)
+            arguments
+                charBlenderModelPath                            string {mustBeA(charBlenderModelPath             , ["string", "char"])}        
+                charBlenderPyInterfacePath                      string {mustBeA(charBlenderPyInterfacePath       , ["string", "char"])}      
+                charStartBlenderServerCallerPath                string {mustBeA(charStartBlenderServerCallerPath , ["string", "char"])}
+                ui32ServerPort                                  (1,1)   uint32 {isnumeric, isscalar}   
+                bUseTmuxShell                                   (1,1)   logical {islogical, isscalar} = true
+            end
 
+            % Method to compose command to manually start blender server with provided paths
+            assert(isfile(charBlenderModelPath), sprintf('Blender model file %s not found.', charBlenderModelPath))
+            assert(isfile(charBlenderPyInterfacePath), sprintf('CORTO interface pyscript not found at %s.', charBlenderPyInterfacePath))
+            assert(isfile(charStartBlenderServerCallerPath), sprintf('Bash script to start CORTO interface pyscript not found at %s.', charStartBlenderServerCallerPath));
+
+            % Construct command to run
+            charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+                charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
+
+            if bUseTmuxShell
+                % Construct tmux_shell
+                charStartBlenderCommand = char(sprintf("tmux new-session -d -s %s '%s; exec bash' & echo $!",...
+                    strcat("bpy", num2str(ui32ServerPort), "_render"), charStartBlenderCommand)) ;
+            end
+        end
     end
 end
