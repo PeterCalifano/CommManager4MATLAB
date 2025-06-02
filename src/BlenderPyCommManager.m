@@ -56,8 +56,9 @@ classdef BlenderPyCommManager < CommManager
         ui32ServerPID                           uint32 {mustBeScalarOrEmpty} = []
 
 
-        % For cross-validation and debug using emulator
-        objShapeModel = [];
+        % Shape model objects for debug and labels generator in sequences
+        objShapeModel               {mustBeA(objShapeModel, ["CShapeModel", "double"])} = [];
+        objLabelsGeneratorModule    {mustBeA(objLabelsGeneratorModule, ["CLabelsGenerator", "double"])} = [];
     end
 
 
@@ -471,6 +472,8 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.bDisplayImage                    (1,1) logical {islogical} = false;
                 kwargs.bAutomaticConvertToTargetFixed   (1,1) logical {islogical} = self.bAutomaticConvertToTargetFixed;
                 kwargs.ui32FirstImgID                   (1,1) uint32 {isnumeric, isscalar} = 1
+                kwargs.objDatasetForLabels              {mustBeA(kwargs.objDatasetForLabels, ["SReferenceImagesDataset", "SImagesDatasetFormatESA", ...
+                    "SSequencesCloudImagesDataset", "SPoses3PointCloudImagesDataset", "double"])} = []
             end
                 
             % Determine number of images from camera origin array
@@ -706,7 +709,27 @@ classdef BlenderPyCommManager < CommManager
 
 
                 % Get labels data
-                % TODO (PC) next upgrade, transmit through TCP? TBD
+                if not(isempty(self.objLabelsGeneratorModule)) && not(isempty(self.objShapeModel)) && not(isempty(kwargs.objDatasetForLabels))
+
+                    % Make binary mask using global Otsu thresholding
+                    if ndims(outImgArrays) == 3
+                        outImgArraysAsGrayscale = rgb2gray(outImgArrays);
+                    else
+                        outImgArraysAsGrayscale = outImgArrays;
+                    end
+
+                    bBinaryMask = imbinarize(outImgArraysAsGrayscale, "global");
+
+                    % Generate labels
+                    self.objLabelsGeneratorModule = self.objLabelsGeneratorModule.makeLabels(kwargs.objDatasetForLabels, ...
+                                                                                        self.objShapeModel, ...
+                                                                                        idImg, ...
+                                                                                        "bBinaryImgArray", bBinaryMask, ...
+                                                                                        "dImgArray", dImg, ...
+                                                                                        "bMakeGeometricLabels", true, ...
+                                                                                        "bMakeAuxiliaryLabels", true, ...
+                                                                                        "bSaveInPlace", true);
+                end
 
                 pause(0.01)
 
@@ -852,6 +875,17 @@ classdef BlenderPyCommManager < CommManager
 
         end
 
+
+        % SETTERS
+        function self = plugLabelsGenerator(self, objLabelsGeneratorModule)
+            arguments
+                self
+                objLabelsGeneratorModule (1,1) CLabelsGenerator {mustBeA(objLabelsGeneratorModule, "CLabelsGenerator")}
+            end
+
+            self.objLabelsGeneratorModule = objLabelsGeneratorModule;
+
+        end
     end
 
     % Blender server automanagement methods
@@ -1331,7 +1365,7 @@ classdef BlenderPyCommManager < CommManager
             % Get number of matrices to convert
             ui32NumOfDCM = uint32(size(dBlenderDCM_AfromB, 3));
 
-            % Conversion loop (TOOD)
+            % Conversion loop (TODO)
             for idM = 1:ui32NumOfDCM
                 % Convert matrices to Blender DCMs
 
