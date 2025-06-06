@@ -168,7 +168,13 @@ classdef BlenderPyCommManager < CommManager
 
             self.bAutomaticConvertToTargetFixed = kwargs.bAutomaticConvertToTargetFixed;
 
-            % Parse yaml configuration file if provided
+            %% Parse/update yaml configuration file if provided
+
+            if not(kwargs.objCameraIntrisincs.bDefaultConstructed)
+                fprintf('\nCamera parameters initialized from input object.\n')
+                self.objCameraIntrinsics = kwargs.objCameraIntrisincs;
+            end
+
             if not(strcmpi(kwargs.charConfigYamlFilename, ""))
 
                 % Read data from yaml file used server side
@@ -235,7 +241,17 @@ classdef BlenderPyCommManager < CommManager
                         self.strConfigFromYaml.RenderingEngine_params.file_format                  = settings.enumOutputImgFormat;
                         self.strConfigFromYaml.RenderingEngine_params.bSaveGeomVisibilityBoolMask  = settings.bSaveGeomVisibilityBoolMask;
                         
-                        % Complete configuration and serialize file
+                        if not(kwargs.objCameraIntrisincs.bDefaultConstructed)
+                            % Write camera parameters
+                            self.strConfigFromYaml.Camera_params.FOV_x = rad2deg(self.objCameraIntrinsics.dFovHW(1));
+                            self.strConfigFromYaml.Camera_params.FOV_y = rad2deg(self.objCameraIntrinsics.dFovHW(2));
+                            self.strConfigFromYaml.Camera_params.sensor_size_x = self.objCameraIntrinsics.ImageSize(1);
+                            self.strConfigFromYaml.Camera_params.sensor_size_y = self.objCameraIntrinsics.ImageSize(2);
+                            self.strConfigFromYaml.Camera_params.n_channels = self.objCameraIntrinsics.ui32NumOfChannels;
+                            self.strConfigFromYaml.Camera_params.compression = 50;
+                        end
+
+                        %%% Complete configuration and serialize file
                         kwargs.charConfigYamlFilename = fullfile(charRootDir, strcat(charFilename, ".yml") );
                         self.serializeYamlConfig_(kwargs.charConfigYamlFilename, self.strConfigFromYaml);
                     
@@ -292,17 +308,8 @@ classdef BlenderPyCommManager < CommManager
             end
 
             % Load camera data from object, yaml config or default data (Milani NavCam)
-            % Input object overrides all
-
-            if not(kwargs.objCameraIntrisincs.bDefaultConstructed)
-                fprintf('\nCamera parameters initialized from input object.\n')
-                self.objCameraIntrinsics = kwargs.objCameraIntrisincs;
-
-                if not(strcmpi(kwargs.charConfigYamlFilename, ""))
-                    warning('Both camera object and yaml configuration file specified. Camera object overrides parameters. Please remove it if this is unintended.')
-                end
-
-            elseif kwargs.objCameraIntrisincs.bDefaultConstructed && not(strcmpi(kwargs.charConfigYamlFilename, ""))
+            % Input object overrides all (reload if written)
+            if not(strcmpi(kwargs.charConfigYamlFilename, "")) 
                 fprintf('\nCamera parameters initialized from yaml configuration file.\n')
                 % Get params from file
 
@@ -326,6 +333,7 @@ classdef BlenderPyCommManager < CommManager
 
                 % Construct camera intrinsics object
                 self.objCameraIntrinsics = CCameraIntrinsics( dFocalLength_uv, dPrincipalPoint_uv, [dSensor_size_x, dSensor_size_y], ui32NumOfChannels );
+                
 
             else
                 % Assume Milani/RCS-1 NavCam parameters
@@ -668,8 +676,12 @@ classdef BlenderPyCommManager < CommManager
                 fprintf("Completed image %d of %d.\n", idImg, ui32NumOfImages)
 
                 if kwargs.bDisplayImage
-                    figure(95)
-                    clf;
+
+                    objCurrentFig = gcf();
+                    if not(objCurrentFig.Number == 95)
+                        figure(95);
+                    end
+
                     %imshow( outImgArrays(:,:,idImg) )
                     imshow( dImg )
                     axis image
@@ -705,6 +717,8 @@ classdef BlenderPyCommManager < CommManager
                             self.bDEBUG_MODE = false;
                         end
                     end
+
+                    drawnow;
                 end
 
 
