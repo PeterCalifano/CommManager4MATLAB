@@ -20,6 +20,7 @@ classdef BlenderPyCommManager < CommManager
     %                                   required by Blender, extensive testing for release version.
     % 10-05-2025    Pietro Califano     Review of major upgrades (validation of output using internal 
     %                                   shape model and frontend emulator, yaml configuration update)
+    % 02-06-2025    Pietro Califano     Add CLabelsGenerator module for labels generation in sequence
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
@@ -54,7 +55,6 @@ classdef BlenderPyCommManager < CommManager
         bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
         bIsServerRunning                        (1,1) logical {islogical, isscalar} = false
         ui32ServerPID                           uint32 {mustBeScalarOrEmpty} = []
-
 
         % Shape model objects for debug and labels generator in sequences
         objShapeModel               {mustBeA(objShapeModel, ["CShapeModel", "double"])} = [];
