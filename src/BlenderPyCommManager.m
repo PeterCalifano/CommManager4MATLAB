@@ -1,13 +1,8 @@
 classdef BlenderPyCommManager < CommManager
-    %% CONSTRUCTOR
-    % TODO
-    % -------------------------------------------------------------------------------------------------------------
     %% DESCRIPTION
-    % TODO
-    % -------------------------------------------------------------------------------------------------------------
-    %% DATA MEMBERS
-    % -------------------------------------------------------------------------------------------------------------
-    %% METHODS
+    % BlenderPyCommManager extends CommManager to interface with Blender via Python. It automates server startup, 
+    % manages YAML configuration for camera and rendering, and converts scene data into a format suitable for 
+    % Blender rendering.
     % -------------------------------------------------------------------------------------------------------------
     %% CHANGELOG
     % 13-01-2025    Pietro Califano     First prototype implementation deriving from CommManager.
@@ -21,6 +16,7 @@ classdef BlenderPyCommManager < CommManager
     % 10-05-2025    Pietro Califano     Review of major upgrades (validation of output using internal 
     %                                   shape model and frontend emulator, yaml configuration update)
     % 02-06-2025    Pietro Califano     Add CLabelsGenerator module for labels generation in sequence
+    % 06-06-2025    Pietro Califano     Update code to configure server yaml with camera params from input
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
