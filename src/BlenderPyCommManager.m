@@ -244,7 +244,7 @@ classdef BlenderPyCommManager < CommManager
                             self.strConfigFromYaml.Camera_params.sensor_size_x = self.objCameraIntrinsics.ImageSize(1);
                             self.strConfigFromYaml.Camera_params.sensor_size_y = self.objCameraIntrinsics.ImageSize(2);
                             self.strConfigFromYaml.Camera_params.n_channels = self.objCameraIntrinsics.ui32NumOfChannels;
-                            self.strConfigFromYaml.Camera_params.compression = 50;
+                            self.strConfigFromYaml.Camera_params.compression = 35;
                         end
 
                         %%% Complete configuration and serialize file
@@ -610,8 +610,8 @@ classdef BlenderPyCommManager < CommManager
                         fprintf("\nProducing requested visualization of scene frames to render...\n")
 
                         % Convert DCMs to quaternion
-                        dSceneEntityQuatArray_RenderFrameFromOF = transpose( dcm2quat(dBodiesAttDCM_RenderFrameFromOF) );
-                        dCameraQuat_RenderFrameFromCam          = transpose( dcm2quat(dCameraAttDCM_RenderFrameFromOF) );
+                        dSceneEntityQuatArray_RenderFrameFromOF = transpose( DCM2quatSeq(dBodiesAttDCM_RenderFrameFromOF, false) );
+                        dCameraQuat_RenderFrameFromCam          = transpose( DCM2quatSeq(dCameraAttDCM_RenderFrameFromOF, false) );
 
                         % if kwargs.bConvertCamQuatToBlenderQuat
                         % DEVNOTE: removed because plot function operates using the same convention as
@@ -646,8 +646,7 @@ classdef BlenderPyCommManager < CommManager
                     end
 
                 catch ME
-                    warning("Failed to reproduce visualization of scene frames due to error.")
-                    fprintf("\n%s", string(ME.message))
+                    warning("Failed to reproduce visualization of scene frames due to error: %s.", string(ME.message))
                 end
 
                 fprintf("\nSending data to render image %d of %d...\n", idImg, ui32NumOfImages)
@@ -1462,7 +1461,9 @@ classdef BlenderPyCommManager < CommManager
                 % DEVNOTE: the quaternion corresponding to the matrix NavFrameFromTF must be first
                 % transposed to be the one required by Blender due to the convention for its definition.
                 % In fact, Blender requires the quaternion from World frame to Object frame!
-                dCameraBlendQuatArray(1:4, idQ) = quatmultiply( dCameraQuaternionArray(1:4,idQ)' , [0,1,0,0]);
+                % dCameraBlendQuatArray(1:4, idQ) = quatmultiply( dCameraQuaternionArray(1:4,idQ)' , [0,1,0,0]);
+                dCameraBlendQuatArray(1:4, idQ) = qCross( dCameraQuaternionArray(1:4,idQ)' , [0,1,0,0], false);
+
             end
         end
 
@@ -1475,7 +1476,7 @@ classdef BlenderPyCommManager < CommManager
             dCameraQuaternionArray = zeros(size(dCameraBlendQuatArray));
 
             for idQ = 1:size(dCameraBlendQuatArray, 2)
-                dCameraQuaternionArray(1:4, idQ) = quatmultiply([0,1,0,0], quatinv(dCameraBlendQuatArray(1:4,idQ)') );
+                dCameraQuaternionArray(1:4, idQ) = qCross([0,1,0,0], qInvert(dCameraBlendQuatArray(1:4,idQ)', false), false);
             end
         end
 
