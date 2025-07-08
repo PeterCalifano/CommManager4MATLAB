@@ -336,7 +336,7 @@ close all
 pause(0.2);
 
 addpath("/home/peterc/devDir/nav-frontend/tests/emulator"); % HARDCODED PATH, need future update
-run('loadSimulationSetup');
+run('SetupSimulationEnv');
 
 % Overwrite model definition if needed
 bUseRCS1 = true;
@@ -473,7 +473,7 @@ objBlenderPyCommManager = BlenderPyCommManager(charServerAddress, ui32ServerPort
     'bInitInPlace', true, 'charBlenderModelPath', charBlenderModelPath, ...
     'bAutoManageBlenderServer', false, 'charBlenderPyInterfacePath', charBlenderPyInterfacePath, ...
     'charStartBlenderServerCallerPath', charStartBlenderServerScriptPath, ...
-    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, "bSendLogToShellPipe", true, ...
+    'ui32TargetPort', ui32TargetPort, 'i64RecvTCPsize', -10, "bUseTmuxShell", true, ...
     "charConfigYamlFilename", charConfigYamlPath);
 
 % Define scene 

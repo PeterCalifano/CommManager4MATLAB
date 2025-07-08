@@ -17,6 +17,7 @@ classdef BlenderPyCommManager < CommManager
     %                                   shape model and frontend emulator, yaml configuration update)
     % 02-06-2025    Pietro Califano     Add CLabelsGenerator module for labels generation in sequence
     % 06-06-2025    Pietro Califano     Update code to configure server yaml with camera params from input
+    % 08-07-2025    Pietro Califano     Fix minor issues for debug mode
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
@@ -563,8 +564,11 @@ classdef BlenderPyCommManager < CommManager
             if self.bDEBUG_MODE && not(isempty(self.objShapeModel))
                 try
                     % Define target and frontend emulator for DEBUG
-                    objEmulatorSettings = SFrontEndTrackerEmulatorSettings("enumRandProcessType", "NONE", "enumTrackLossModel", ...
-                        "NONE", "ui32MAX_NUM_FEATURES", 1e3, 'bUseMexMethods', true);
+                    objEmulatorSettings = SFrontEndTrackerEmulatorSettings("enumRandProcessType", "NONE", ...
+                                                                            "enumTrackLossModel", ...
+                                                                            "NONE", "ui32MAX_NUM_FEATURES", 1e3, ...
+                                                                            'bUseMexMethods', true, ...
+                                                                            "enumVisibilityCheckMode", "ShadowRays_MATLAB");
 
                     objTargetEmulator = CTargetEmulator(self.objShapeModel, 1e3, SPose3());
                     objFrontEndEmulator = CFrontEndTracker_Emulator(self.objCameraIntrinsics, ...
@@ -691,6 +695,10 @@ classdef BlenderPyCommManager < CommManager
                             objKeypointsVisibilityPlot = figure(98);
                             set(objKeypointsVisibilityPlot, 'Position', [0, 480, 480, 480]);
 
+                            if max(abs(dCameraOrigin_RenderFrame)) < 50.0 % Heuristic to check if km or m
+                                dCameraOrigin_RenderFrame = 1000 * dCameraOrigin_RenderFrame;
+                            end
+
                             objFrontEndEmulator = objFrontEndEmulator.acquireFrame(SPose3(dCameraOrigin_RenderFrame, dCameraAttDCM_RenderFrameFromOF), ...
                                                                                        dBodiesAttDCM_RenderFrameFromOF(:,:,1)' * dSunVector_RenderFrame, ...
                                                                                         idImg);
@@ -741,7 +749,7 @@ classdef BlenderPyCommManager < CommManager
                                                                                         "bSaveInPlace", true);
                 end
 
-                pause(0.01)
+                pause(0.001)
 
                 if kwargs.bEnableFramesPlot
                     close(objSceneFigs(idImg)); % Close figure to prevent accumulation
