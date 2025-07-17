@@ -746,6 +746,10 @@ classdef BlenderPyCommManager < CommManager
                                                                                         "bMakeGeometricLabels", true, ...
                                                                                         "bMakeAuxiliaryLabels", true, ...
                                                                                         "bSaveInPlace", true);
+                elseif not(isempty(self.objLabelsGeneratorModule)) && isempty(self.objShapeModel)
+                    warning('ERROR: labels generator module is available, but shape model object is missing. Labels cannot be generated! Please provide it as input.')
+                elseif not(isempty(self.objLabelsGeneratorModule)) && isempty(kwargs.objDatasetForLabels)
+                    warning('ERROR: labels generator module is available, but dataset object is missing. Labels cannot be generated! Please provide it as input.')
                 end
 
                 pause(0.001)
