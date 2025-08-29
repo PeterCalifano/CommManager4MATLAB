@@ -246,6 +246,11 @@ classdef BlenderPyCommManager < CommManager
                             self.strConfigFromYaml.Camera_params.sensor_size_y = self.objCameraIntrinsics.ImageSize(2);
                             self.strConfigFromYaml.Camera_params.n_channels = self.objCameraIntrinsics.ui32NumOfChannels;
                             self.strConfigFromYaml.Camera_params.compression = 35;
+
+                            %[~, charSysName] = system('hostname');
+                            %if contains(charSysName,'alien')
+                            %    self.strConfigFromYaml.RenderingEngine_params.device = 'CPU';
+                            %end
                         end
 
                         %%% Complete configuration and serialize file
