@@ -1121,23 +1121,34 @@ classdef BlenderPyCommManager < CommManager
                         fprintf("\nAuto managed mode is enabled. Attempting to start Blender server automagically... \n")
                     end
 
-                    % Construct command to run
-                    charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
-                        charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
-
                     % Logging options
-
+                    charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+                                    charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
+                    
                     if bUseTmuxShell == true
                                            
+                        % Construct command to run
                         % system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
                         charTmuxSessionName = strcat("bpy", num2str(ui32NetworkPortToCheck), "_render");
+                        charStartBlenderCommand = sprintf("tmux new-session -d -s %s '%s; exec bash' & echo $!",...
+                                                charTmuxSessionName, charStartBlenderCommand) ;
 
-                        charStartBlenderCommand = char(sprintf("tmux new-session -d -s %s '%s; exec bash' & echo $!",...
-                                                charTmuxSessionName, charStartBlenderCommand)) ;
+                        % charStartBlenderCommand = sprintf("tmux new-session -d -s %s -- bash -lc " + """bash %s " + "-m '%s' " + "-p '%s'""", ...
+                        %                             charTmuxSessionName, charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
+
+                        % charStartBlenderCommand = sprintf('tmux new-session -d -s %s -- bash -lc "bash %s -m ''%s'' -p ''%s''"', ...
+                        %                             charTmuxSessionName, charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
+
+                        % charStartBlenderCommand = "tmux new-session -d -s bpy30007_render -- bash -lc " + ...
+                        %     """bash /home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/StartBlenderServer.sh " + ...
+                        %     "-m '/home/peterc/devDir/projects-DART/data/rcs-1/phase-C/blender/Apophis_RGB.blend' " + ...
+                        %     "-p '/home/peterc/devDir/rendering-sw/corto_PeterCdev/server_api/BlenderPy_UDP_TCP_interface_withCaching.py'""";
+
 
                         charLogPipePath = sprintf("Using new tmux session: %s", charTmuxSessionName);
                         
                     else
+                        % Construct command to run
                         charStartBlenderCommand = char(strcat(charStartBlenderCommand, " & echo $!"));
                         charLogPipePath = "Log disabled.";
                     end
