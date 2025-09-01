@@ -247,10 +247,10 @@ classdef BlenderPyCommManager < CommManager
                             self.strConfigFromYaml.Camera_params.n_channels = self.objCameraIntrinsics.ui32NumOfChannels;
                             self.strConfigFromYaml.Camera_params.compression = 35;
 
-                            %[~, charSysName] = system('hostname');
-                            %if contains(charSysName,'alien')
-                            %    self.strConfigFromYaml.RenderingEngine_params.device = 'CPU';
-                            %end
+                            [~, charSysName] = system('hostname');
+                            if contains(charSysName,'alien')
+                                self.strConfigFromYaml.RenderingEngine_params.device = 'CPU';
+                            end
                         end
 
                         %%% Complete configuration and serialize file
@@ -1271,9 +1271,9 @@ classdef BlenderPyCommManager < CommManager
                 if not(isempty(cellPIDs_))
                     % Kill the process
                     for cellPID = cellPIDs_
-                        fprintf('Killing process %s...', cellPID{:})
+                        fprintf('Killing process %s...n', cellPID{:})
                         [bFlag] = system(sprintf('kill -9 %s', cellPID{:}));
-                        fprintf(' status flag: %s\n', bFlag);
+                        fprintf('\nStatus flag: %s\n', bFlag);
                     end
                 end
 
