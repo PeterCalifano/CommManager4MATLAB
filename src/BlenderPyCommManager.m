@@ -89,7 +89,7 @@ classdef BlenderPyCommManager < CommManager
                 kwargs.bUseTmuxShell                    (1,1) logical       {islogical, isscalar} = false;
                 kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false;
                 kwargs.bDEBUG_MODE                      (1,1) logical       {islogical, isscalar} = false;
-                kwargs.objShapeModel                     = []
+                kwargs.objShapeModel                     = CShapeModel()
                 kwargs.charDatasetSaveFolder            (1,:) string {mustBeA(kwargs.charDatasetSaveFolder, ["string", "char"])} = ""
             end
             arguments
