@@ -326,7 +326,7 @@ classdef TensorCommManager < CommManager
                 cellTensorArrays {mustBeA(cellTensorArrays, ["cell","double","uint8","single"])}
             end
             arguments
-                kwargs.ui32MAX_BUFFER_SIZE (1,1) uint32 {isnumeric, isscalar} = 1E8
+                kwargs.ui32MAX_BUFFER_SIZE (1,1) uint32 {mustBenumeric, isscalar} = 1E8
             end
             %% SIGNATURE
             % [ui8DataBuffer, ui32TensorDims, ui32TensorShapes] = MultiTensor2Bytes(cellTensorArrays, kwargs)
@@ -351,7 +351,7 @@ classdef TensorCommManager < CommManager
             % -------------------------------------------------------------------------------------------------------------
              
             % Input detected to be a tensor, perform wrapping to cell
-            if isnumeric(cellTensorArrays)
+            if mustBenumeric(cellTensorArrays)
                 cellTensorArrays = {cellTensorArrays};
             end
 

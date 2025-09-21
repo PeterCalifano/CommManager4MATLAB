@@ -1,6 +1,6 @@
 function dImgRGB = UnpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)%#codegen
 arguments
-    dImgBuffer          (:,1) double {isvector, isnumeric, isa(dImgBuffer, 'double')}
+    dImgBuffer          (:,1) double {isvector, mustBenumeric, isa(dImgBuffer, 'double')}
     bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
 end
 %% SIGNATURE
