@@ -104,7 +104,7 @@ classdef CommManager < handle
                 kwargs.bLittleEndianOrdering    (1,1) logical       {islogical, isscalar} = true;
                 kwargs.dOutputDatagramSize      (1,1) double        {isscalar, mustBeNumeric} = 512     
                 kwargs.ui32TargetPort           (1,1) uint32        {isscalar, mustBeNumeric} = 0
-                kwargs.charTargetAddress        (1,:) string        {isscalar, mustBeNumeric} = "127.0.0.1"
+                kwargs.charTargetAddress        (1,:) string        {isscalar} = "127.0.0.1"
                 kwargs.i64RecvTCPsize           (1,1) int64         {isscalar, mustBeNumeric} = -1; 
             end
             
