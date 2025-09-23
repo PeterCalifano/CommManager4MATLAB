@@ -245,7 +245,7 @@ classdef BlenderPyCommManager < CommManager
                             self.strConfigFromYaml.Camera_params.sensor_size_x = self.objCameraIntrinsics.ImageSize(1);
                             self.strConfigFromYaml.Camera_params.sensor_size_y = self.objCameraIntrinsics.ImageSize(2);
                             self.strConfigFromYaml.Camera_params.n_channels = self.objCameraIntrinsics.ui32NumOfChannels;
-                            self.strConfigFromYaml.Camera_params.compression = 35;
+                            self.strConfigFromYaml.Camera_params.compression = 100;
 
                             [~, charSysName] = system('hostname');
                             if contains(charSysName,'alien')
