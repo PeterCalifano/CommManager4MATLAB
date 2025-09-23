@@ -57,7 +57,7 @@ classdef CommManager < handle
 
         bDEBUG_MODE
         charServerAddress
-        ui32ServerPort          {isnumeric}
+        ui32ServerPort          {mustBeNumeric}
         dCommTimeout
         enumCommMode
         ui8CommMode = 0; % TODO (PC) check if still needed by subclasses
@@ -92,8 +92,8 @@ classdef CommManager < handle
         function self = CommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
                 charServerAddress (1,:) string          {ischar, isstring}    = ""
-                ui32ServerPort    (1,:) uint32          {isvector, isnumeric} = 0
-                dCommTimeout      (1,1) double          {isscalar, isnumeric} = 20     
+                ui32ServerPort    (1,:) uint32          {isvector, mustBeNumeric} = 0
+                dCommTimeout      (1,1) double          {isscalar, mustBeNumeric} = 20     
             end
             
             arguments
@@ -102,10 +102,10 @@ classdef CommManager < handle
                 kwargs.bInitInPlace             (1,1) logical       {islogical, isscalar} = false
                 kwargs.enumCommMode             (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.TCP
                 kwargs.bLittleEndianOrdering    (1,1) logical       {islogical, isscalar} = true;
-                kwargs.dOutputDatagramSize      (1,1) double        {isscalar, isnumeric} = 512     
-                kwargs.ui32TargetPort           (1,1) uint32        {isscalar, isnumeric} = 0
-                kwargs.charTargetAddress        (1,:) string        {isscalar, isnumeric} = "127.0.0.1"
-                kwargs.i64RecvTCPsize           (1,1) int64         {isscalar, isnumeric} = -1; 
+                kwargs.dOutputDatagramSize      (1,1) double        {isscalar, mustBeNumeric} = 512     
+                kwargs.ui32TargetPort           (1,1) uint32        {isscalar, mustBeNumeric} = 0
+                kwargs.charTargetAddress        (1,:) string        {isscalar} = "127.0.0.1"
+                kwargs.i64RecvTCPsize           (1,1) int64         {isscalar, mustBeNumeric} = -1; 
             end
             
             fprintf('\nCreating communication manager object... \n')
@@ -226,7 +226,7 @@ classdef CommManager < handle
                 self                (1,1)
                 dataBuffer          (1,:) uint8   {isvector, isa(dataBuffer, 'uint8')}
                 bAddDataSize        (1,1) logical {islogical, isscalar}     = false
-                ui32TargetPort      (1,1) uint32  {isnumeric, isscalar}     = 0
+                ui32TargetPort      (1,1) uint32  {mustBeNumeric, isscalar}     = 0
                 charTargetAddress   (1,:) string  {isvector}                = "127.0.0.1"
             end
             
@@ -284,7 +284,7 @@ classdef CommManager < handle
         function [recvBytes, recvDataBuffer, self] = ReadBuffer(self, i64BytesSizeToRead)
             arguments
                 self
-                i64BytesSizeToRead (1,1) int64 {isscalar, isnumeric} = -1
+                i64BytesSizeToRead (1,1) int64 {isscalar, mustBeNumeric} = -1
             end
             
             self.assertInit();
