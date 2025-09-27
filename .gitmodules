@@ -1,0 +1,4 @@
+[submodule "lib/matlab-msgpack_PeterCdev"]
+	path = lib/matlab-msgpack_PeterCdev
+	url = git@github.com:PeterCalifano/matlab-msgpack_PeterCdev.git
+	branch = master
