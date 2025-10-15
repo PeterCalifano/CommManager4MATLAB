@@ -946,7 +946,7 @@ classdef BlenderPyCommManager < CommManager
                 end
 
                 % Construct command to run
-                charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+                charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s" -k', ...
                     self.charStartBlenderServerCallerPath, self.charBlenderModelPath, self.charBlenderPyInterfacePath);
 
                 if self.bUseTmuxShell
