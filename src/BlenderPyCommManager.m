@@ -1122,7 +1122,7 @@ classdef BlenderPyCommManager < CommManager
                     end
 
                     % Logging options
-                    charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+                    charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s" -k', ...
                                     charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
                     
                     if bUseTmuxShell == true
