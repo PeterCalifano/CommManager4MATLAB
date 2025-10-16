@@ -34,7 +34,7 @@ classdef BlenderPyCommManager < CommManager
         % ui32ServerPort % Get from yaml if specified else from input % Defined in superclass
         
         % Configuration
-        bUseTmuxShell                       (1,1) logical {islogical, isscalar} = true 
+        bUseTmuxShell                       (1,1) logical = true 
 
         charBlenderModelPath                (1,1) string {mustBeA(charBlenderModelPath, ["string", "char"])}
         charBlenderPyInterfacePath          (1,1) string {mustBeA(charBlenderPyInterfacePath, ["string", "char"])}  
@@ -42,15 +42,15 @@ classdef BlenderPyCommManager < CommManager
         
         charOutputDatatype              {mustBeMember(charOutputDatatype, ["double", "single", "uint8", "uint32", "uint16", "source"])} = "source";
         charOutputPath; % Currently read only, this cannot be set from MATLAB
-        bAutomaticConvertToTargetFixed  (1,1) logical {islogical, isscalar} = false;
+        bAutomaticConvertToTargetFixed  (1,1) logical = false;
 
         % Bytes to image conversion params
         objCameraIntrinsics = CCameraIntrinsics();
         enumCommDataType (1,1) {mustBeA(enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.DOUBLE
 
         % Runtime flags
-        bIsValidServerAutoManegementConfig      (1,1) logical {islogical, isscalar} = false
-        bIsServerRunning                        (1,1) logical {islogical, isscalar} = false
+        bIsValidServerAutoManegementConfig      (1,1) logical = false
+        bIsServerRunning                        (1,1) logical = false
         ui32ServerPID                           uint32 {mustBeScalarOrEmpty} = []
 
         % Shape model objects for debug and labels generator in sequences
@@ -70,25 +70,25 @@ classdef BlenderPyCommManager < CommManager
             end
             % TODO: adjust kwargs required for BlenderPy
             arguments
-                kwargs.bInitInPlace                     (1,1) logical       {islogical, isscalar} = false
-                kwargs.enumCommMode                     (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.UDP_TCP
-                kwargs.bLittleEndianOrdering            (1,1) logical       {islogical, isscalar} = true;
-                kwargs.dOutputDatagramSize              (1,1) double        {isscalar, mustBeNumeric} = 512
-                kwargs.ui32TargetPort                   (1,1) uint32        {isscalar, mustBeNumeric} = 0
+                kwargs.bInitInPlace                     (1,1) logical       = false
+                kwargs.enumCommMode                     (1,1) EnumCommMode  {mustBeA(kwargs.enumCommMode, ["EnumCommMode", "string", "char"])} = EnumCommMode.UDP_TCP
+                kwargs.bLittleEndianOrdering            (1,1) logical       = true;
+                kwargs.dOutputDatagramSize              (1,1) double        {mustBeNumeric} = 512
+                kwargs.ui32TargetPort                   (1,1) uint32        {mustBeNumeric} = 0
                 kwargs.charTargetAddress                (1,:) string        {mustBeA(kwargs.charTargetAddress , ["string", "char"])} = "127.0.0.1"
                 kwargs.charOutputDatatype               (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"]), ...
                                                                   mustBeMember(kwargs.charOutputDatatype, ["double", "single", "uint8", "uint32", "uint16", "source"])} = "source";
-                kwargs.i64RecvTCPsize                   (1,1) int64         {isscalar, mustBeNumeric} = -1; % SPECIAL MODE: -5, -10 (auto compute)
+                kwargs.i64RecvTCPsize                   (1,1) int64         {mustBeNumeric} = -1; % SPECIAL MODE: -5, -10 (auto compute)
                 kwargs.charConfigYamlFilename           (1,:) string        {mustBeA(kwargs.charConfigYamlFilename , ["string", "char"])}  = ""
-                kwargs.bAutoManageBlenderServer         (1,1) logical       {isscalar, islogical} = false
+                kwargs.bAutoManageBlenderServer         (1,1) logical       = false
                 kwargs.charStartBlenderServerCallerPath (1,:) string        {mustBeA(kwargs.charStartBlenderServerCallerPath , ["string", "char"])} = ""
                 kwargs.charBlenderModelPath             (1,:) string        {mustBeA(kwargs.charBlenderModelPath , ["string", "char"])} = ""
                 kwargs.charBlenderPyInterfacePath       (1,:) string        {mustBeA(kwargs.charBlenderPyInterfacePath , ["string", "char"])} = ""
                 kwargs.objCameraIntrisincs              (1,1)               {mustBeA(kwargs.objCameraIntrisincs, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumCommDataType                 (1,1)               {mustBeA(kwargs.enumCommDataType, 'EnumCommDataType')} = EnumCommDataType.UNSET
-                kwargs.bUseTmuxShell                    (1,1) logical       {islogical, isscalar} = false;
-                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical       {islogical, isscalar} = false;
-                kwargs.bDEBUG_MODE                      (1,1) logical       {islogical, isscalar} = false;
+                kwargs.bUseTmuxShell                    (1,1) logical  = false;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical  = false;
+                kwargs.bDEBUG_MODE                      (1,1) logical  = false;
                 kwargs.objShapeModel                     = CShapeModel()
                 kwargs.charDatasetSaveFolder            (1,:) string {mustBeA(kwargs.charDatasetSaveFolder, ["string", "char"])} = ""
             end
@@ -97,7 +97,7 @@ classdef BlenderPyCommManager < CommManager
                                                                         mustBeA(settings.enumImgBitDepth, ["string", "char"])} = "8"
                 settings.enumOutputImgFormat            (1,1) string {mustBeMember(settings.enumOutputImgFormat, ["PNG", "OPEN_EXR"]), ...
                                                                 mustBeA(settings.enumOutputImgFormat, ["string", "char"])} = "PNG"
-                settings.bSaveGeomVisibilityBoolMask    (1,1) logical {islogical} = false
+                settings.bSaveGeomVisibilityBoolMask    (1,1) logical = false
             end
 
             bIsValidServerAutoManegementConfig = false;
@@ -1089,9 +1089,9 @@ classdef BlenderPyCommManager < CommManager
                 charBlenderModelPath                            string {mustBeA(charBlenderModelPath             , ["string", "char"])}        
                 charBlenderPyInterfacePath                      string {mustBeA(charBlenderPyInterfacePath       , ["string", "char"])}      
                 charStartBlenderServerCallerPath                string {mustBeA(charStartBlenderServerCallerPath , ["string", "char"])}
-                bUseTmuxShell                           (1,1)   logical {islogical, isscalar} = true
-                ui32NetworkPortToCheck                  (1,1)   uint32 {mustBeNumeric, isscalar} = 51001        
-                bIsValidServerAutoManegementConfig      (1,1)   logical {islogical, isscalar} = false
+                bUseTmuxShell                           (1,1)   logical = true
+                ui32NetworkPortToCheck                  (1,1)   uint32 {mustBeNumeric} = 51001        
+                bIsValidServerAutoManegementConfig      (1,1)   logical = false
             end
 
             bIsServerRunning = false;
@@ -1131,7 +1131,7 @@ classdef BlenderPyCommManager < CommManager
                         % system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
                         charTmuxSessionName = strcat("bpy", num2str(ui32NetworkPortToCheck), "_render");
                         charStartBlenderCommand = sprintf("tmux new-session -d -s %s '%s; exec bash' & echo $!",...
-                                                charTmuxSessionName, charStartBlenderCommand) ;
+                                                charTmuxSessionName, strcat(charStartBlenderCommand, " -k") );
 
                         % charStartBlenderCommand = sprintf("tmux new-session -d -s %s -- bash -lc " + """bash %s " + "-m '%s' " + "-p '%s'""", ...
                         %                             charTmuxSessionName, charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
