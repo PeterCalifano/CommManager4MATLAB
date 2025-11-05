@@ -1724,7 +1724,7 @@ classdef BlenderPyCommManager < CommManager
             assert(isfile(charStartBlenderServerCallerPath), sprintf('Bash script to start CORTO interface pyscript not found at %s.', charStartBlenderServerCallerPath));
 
             % Construct command to run
-            charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s"', ...
+            charStartBlenderCommand = sprintf('bash %s -m "%s" -p "%s" -k', ...
                 charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
 
             if bUseTmuxShell
