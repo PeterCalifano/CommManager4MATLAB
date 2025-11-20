@@ -918,6 +918,7 @@ classdef BlenderPyCommManager < CommManager
         % TODO this must be printed only if truly enabled. These methods can also be called manually
         
         function [bIsServerRunning] = startBlenderServer(self)
+
             % Call static method to start server
             [bIsServerRunning, self.ui32ServerPID] = BlenderPyCommManager.startBlenderServerStatic(self.charBlenderModelPath, ...
                                                                             self.charBlenderPyInterfacePath, ...
@@ -1101,7 +1102,7 @@ classdef BlenderPyCommManager < CommManager
                 % charBlenderModelPath             % Path of .blend file to load
                 % charBlenderPyInterfacePath         % Path to python Blender interface script
                 % charStartBlenderServerCallerPath % Path to caller bash script
-                
+
                 % DEVNOTE method works using the same assumption of RCS-1 code. The script is called by
                 % blender instead of as standalone. Next iterations will work by opening the server and
                 % setup everything calling Blender when needed for rendering
@@ -1127,10 +1128,14 @@ classdef BlenderPyCommManager < CommManager
                         charStartBlenderServerCallerPath, charBlenderModelPath, charBlenderPyInterfacePath);
                     
                     if bUseTmuxShell == true
-                        
+                        % Detect if tmux window with same name is already opened
+                        charTmuxSessionName = strcat("bpy", num2str(ui32NetworkPortToCheck), "_render");
+
+                        % If open, ask user whether to kill
+                        CheckExistsTmuxSession(charTmuxSessionName);
+
                         % Construct command to run
                         % system('mkfifo /tmp/blender_pipe'); % Open a shell and write cat /tmp/blender_pipe to display log being written by Blender
-                        charTmuxSessionName = strcat("bpy", num2str(ui32NetworkPortToCheck), "_render");
                         charStartBlenderCommand = sprintf("tmux new-session -d -s %s '%s; exec bash' & echo $!",...
                             charTmuxSessionName, strcat(charStartBlenderCommand, " -k") );
                         
@@ -1734,10 +1739,10 @@ classdef BlenderPyCommManager < CommManager
         
         % Method to compose command to manually start server with provided paths
         function [charStartBlenderCommand] = GetBlenderStartCommandStatic(charBlenderModelPath, ...
-                charBlenderPyInterfacePath, ...
-                charStartBlenderServerCallerPath, ...
-                ui32ServerPort, ...
-                bUseTmuxShell)
+                                                                        charBlenderPyInterfacePath, ...
+                                                                        charStartBlenderServerCallerPath, ...
+                                                                        ui32ServerPort, ...
+                                                                        bUseTmuxShell)
             arguments
                 charBlenderModelPath                            string {mustBeA(charBlenderModelPath             , ["string", "char"])}
                 charBlenderPyInterfacePath                      string {mustBeA(charBlenderPyInterfacePath       , ["string", "char"])}
