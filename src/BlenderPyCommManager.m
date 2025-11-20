@@ -64,8 +64,8 @@ classdef BlenderPyCommManager < CommManager
         function self = BlenderPyCommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs, settings)
             arguments
                 charServerAddress (1,:) {ischar, isstring}              = "127.0.0.1" % Assumes localhost
-                ui32ServerPort    (1,2) uint32  {isvector, mustBeNumeric}   = [30001, 51000]; % [TCP, UDP] Assumes ports used by BlenderPy interface
-                dCommTimeout      (1,1) double  {isscalar, mustBeNumeric}   = 45
+                ui32ServerPort    (1,2) uint32  {mustBeNumeric}   = [30001, 51000]; % [TCP, UDP] Assumes ports used by BlenderPy interface
+                dCommTimeout      (1,1) double  {mustBeNumeric}   = 45
             end
             % TODO: adjust kwargs required for BlenderPy
             arguments
