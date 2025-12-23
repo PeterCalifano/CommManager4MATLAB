@@ -404,7 +404,7 @@ classdef BlenderPyCommManager < CommManager
         function setTargetPortUDP(self, ui32TargetPort)
             arguments
                 self
-                ui32TargetPort                   (1,1) uint32        {isscalar, mustBeNumeric} = 51001 % Defaut for CORTO UDP recv
+                ui32TargetPort                   (1,1) uint32        {mustBeNumeric} = 51001 % Defaut for CORTO UDP recv
             end
             
             self.ui32TargetPort = ui32TargetPort;
@@ -463,24 +463,24 @@ classdef BlenderPyCommManager < CommManager
                 kwargs)
             arguments (Input)
                 self
-                dSunVector_Buffer_RenderFrame              (3,:)       double {isvector, mustBeNumeric}
-                dCameraOrigin_Buffer_RenderFrame           (3,:)       double {isvector, mustBeNumeric}
-                dCameraAttDCM_Buffer_RenderFrameFromOF     (3,3,:)     double {ismatrix, mustBeNumeric}
-                dBodiesOrigin_Buffer_RenderFrame           (3,:,:)     double {ismatrix, mustBeNumeric} = zeroes(3,1)
-                dBodiesAttDCM_Buffer_RenderFrameFromOF     (3,3,:,:)   double {ismatrix, mustBeNumeric} = eye(3)
+                dSunVector_Buffer_RenderFrame              (3,:)       double {mustBeNumeric}
+                dCameraOrigin_Buffer_RenderFrame           (3,:)       double {mustBeNumeric}
+                dCameraAttDCM_Buffer_RenderFrameFromOF     (3,3,:)     double {mustBeNumeric}
+                dBodiesOrigin_Buffer_RenderFrame           (3,:,:)     double {mustBeNumeric} = zeroes(3,1)
+                dBodiesAttDCM_Buffer_RenderFrameFromOF     (3,3,:,:)   double {mustBeNumeric} = eye(3)
             end
             arguments (Input)
-                kwargs.ui32TargetPort                   (1,1) uint32 {isscalar, mustBeNumeric} = 0
+                kwargs.ui32TargetPort                   (1,1) uint32 {mustBeNumeric} = 0
                 kwargs.charOutputDatatype               (1,:) string {mustBeA(kwargs.charOutputDatatype, ["string", "char"]), ...
                     mustBeMember(kwargs.charOutputDatatype, ["double", "single", "uint8", "uint32", "uint16", "source"])} = self.charOutputDatatype
-                kwargs.ui32NumOfBodies                  (1,1) uint32 {mustBeNumeric, isscalar} = 1
+                kwargs.ui32NumOfBodies                  (1,1) uint32 {mustBeNumeric} = 1
                 kwargs.objCameraIntrinsics              (1,1) {mustBeA(kwargs.objCameraIntrinsics, "CCameraIntrinsics")} = CCameraIntrinsics()
                 kwargs.enumRenderingFrame               (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.CUSTOM_FRAME % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.bEnableFramesPlot                (1,1) logical {islogical} = false;
-                kwargs.bConvertCamQuatToBlenderQuat     (1,1) logical {isscalar, islogical} = true;
-                kwargs.bDisplayImage                    (1,1) logical {islogical} = false;
-                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical {islogical} = self.bAutomaticConvertToTargetFixed;
-                kwargs.ui32FirstImgID                   (1,1) uint32 {mustBeNumeric, isscalar} = 1
+                kwargs.bEnableFramesPlot                (1,1) logical = false;
+                kwargs.bConvertCamQuatToBlenderQuat     (1,1) logical = true;
+                kwargs.bDisplayImage                    (1,1) logical = false;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical = self.bAutomaticConvertToTargetFixed;
+                kwargs.ui32FirstImgID                   (1,1) uint32 {mustBeNumeric} = 1
                 kwargs.objDatasetForLabels              {mustBeA(kwargs.objDatasetForLabels, ["SReferenceImagesDataset", "SImagesDatasetFormatESA", ...
                     "SSequencesCloudImagesDataset", "SPoses3PointCloudImagesDataset", "double"])} = []
             end
