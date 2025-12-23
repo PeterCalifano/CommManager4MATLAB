@@ -786,19 +786,19 @@ classdef BlenderPyCommManager < CommManager
                 kwargs)
             arguments
                 self
-                dSunVector_RenderFrame             (3,1)   double {isvector, mustBeNumeric}
-                dCameraOrigin_RenderFrame          (3,1)   double {isvector, mustBeNumeric}
-                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {ismatrix, mustBeNumeric}
-                dBodiesOrigin_RenderFrame          (3,:)   double {ismatrix, mustBeNumeric} = zeros(3,1)
-                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {ismatrix, mustBeNumeric} = eye(3)
+                dSunVector_RenderFrame             (3,1)   double {mustBeNumeric}
+                dCameraOrigin_RenderFrame          (3,1)   double {mustBeNumeric}
+                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {mustBeNumeric}
+                dBodiesOrigin_RenderFrame          (3,:)   double {mustBeNumeric} = zeros(3,1)
+                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {mustBeNumeric} = eye(3)
             end
             arguments % kwargs arguments
-                kwargs.enumRenderingFrame               (1,1) EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.dRenderFrameOrigin               (3,1) double  {isvector, mustBeNumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_RenderFrameFromRenderFrame     (3,3) double  {ismatrix, mustBeNumeric} = eye(3)
-                kwargs.ui32TargetPort                   (1,1) uint32  {isscalar, mustBeNumeric} = 0
-                kwargs.bConvertCamQuatToBlenderQuat     (1,1) logical {isscalar, islogical} = true;
-                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical {isscalar, islogical} = self.bAutomaticConvertToTargetFixed;
+                kwargs.enumRenderingFrame               (1,1) EnumRenderingFrame {mustBeA(kwargs.enumRenderingFrame, ["EnumRenderingFrame", "string", "char"])} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.dRenderFrameOrigin               (3,1) double  {mustBeNumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_RenderFrameFromRenderFrame     (3,3) double  {mustBeNumeric} = eye(3)
+                kwargs.ui32TargetPort                   (1,1) uint32  {mustBeNumeric} = 0
+                kwargs.bConvertCamQuatToBlenderQuat     (1,1) logical = true;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1) logical = self.bAutomaticConvertToTargetFixed;
             end
             
             % Input size and validation checks
@@ -845,12 +845,12 @@ classdef BlenderPyCommManager < CommManager
         % SINGLE IMAGE RENDERING from PQ scene data (intended as internal implementation, but exposed)
         function [dImg, self] = renderImageFromPQ_(self, dSceneDataVector, options)
             arguments
-                self       (1,1)
-                dSceneDataVector (1,:) double {isvector, mustBeNumeric}
+                self             (1,1)
+                dSceneDataVector (1,:) double {mustBeNumeric}
             end
             arguments % TODO: remove these options and replace with camera object from self
-                options.bApplyBayerFilter (1,1) logical {islogical, isscalar} = false;
-                options.bIsImageRGB       (1,1) logical {islogical, isscalar} = false;
+                options.bApplyBayerFilter (1,1) logical = false;
+                options.bIsImageRGB       (1,1) logical = false;
             end
             % NOTE: this class is intended as internal method, but left exposed for advanced users
             % and improved flexibility of the class implementation.
@@ -979,9 +979,9 @@ classdef BlenderPyCommManager < CommManager
         function dImg = unpackImageFromCORTO(self, dImgBuffer, bApplyBayerFilter, bIsImageRGB)
             arguments
                 self
-                dImgBuffer          (:,1) double {isvector, mustBeNumeric, isa(dImgBuffer, 'double')}
-                bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
-                bIsImageRGB         (1,1) logical {islogical, isscalar} = false;
+                dImgBuffer          (:,1) double {mustBeNumeric, mustBeA(dImgBuffer, 'double')}
+                bApplyBayerFilter   (1,1) logical = false;
+                bIsImageRGB         (1,1) logical = false;
             end
             
             if bIsImageRGB
@@ -1005,7 +1005,7 @@ classdef BlenderPyCommManager < CommManager
         function dImgRGB = unpackImageFromCORTO_impl(self, dImgBuffer, bApplyBayerFilter)
             arguments
                 self                (1,1)
-                dImgBuffer          (:,1) double {isvector, mustBeNumeric, isa(dImgBuffer, 'double')}
+                dImgBuffer          (:,1) double {mustBeNumeric, mustBeA(dImgBuffer, 'double')}
                 bApplyBayerFilter   (1,1) logical = false;
             end
             %% SIGNATURE
@@ -1016,7 +1016,7 @@ classdef BlenderPyCommManager < CommManager
             % -------------------------------------------------------------------------------------------------------------
             %% INPUT
             % dImgBuffer          (:,1) double {isvector, mustBeNumeric, isa(dImgBuffer, 'double')}
-            % bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
+            % bApplyBayerFilter   (1,1) logical  = false;
             % -------------------------------------------------------------------------------------------------------------
             %% OUTPUT
             % dImg
@@ -1322,18 +1322,19 @@ classdef BlenderPyCommManager < CommManager
                 dBodiesAttDCM_RenderFrameFromOF, ...
                 kwargs)
             arguments
-                dSunVector_RenderFrame             (3,1)   double {isvector, mustBeNumeric}
-                dCameraOrigin_RenderFrame          (3,1)   double {isvector, mustBeNumeric}
-                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {ismatrix, mustBeNumeric}
-                dBodiesOrigin_RenderFrame          (3,:)   double {ismatrix, mustBeNumeric} = zeroes(3,1)
-                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {ismatrix, mustBeNumeric} = eye(3)
+                dSunVector_RenderFrame             (3,1)   double {mustBeNumeric}
+                dCameraOrigin_RenderFrame          (3,1)   double {mustBeNumeric}
+                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {mustBeNumeric}
+                dBodiesOrigin_RenderFrame          (3,:)   double {mustBeNumeric} = zeroes(3,1)
+                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {mustBeNumeric} = eye(3)
             end
             arguments % kwargs arguments
-                kwargs.enumRenderingFrame               (1,1)    EnumRenderingFrame {isa(kwargs.enumRenderingFrame, 'EnumRenderingFrame')} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
-                kwargs.dRenderFrameOrigin               (3,1)    double {isvector, mustBeNumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
-                kwargs.dDCM_RenderFrameFromRenderFrame  (3,3)    double {ismatrix, mustBeNumeric} = eye(3)
-                kwargs.bConvertCamQuatToBlenderQuat     (1,1)    logical {islogical, isscalar} = false;
-                kwargs.bAutomaticConvertToTargetFixed   (1,1)    logical {islogical, isscalar} = false;
+                kwargs.enumRenderingFrame               (1,1)    EnumRenderingFrame {mustBeA(kwargs.enumRenderingFrame, ...
+                                        ["EnumRenderingFrame", "string", "char"])} = EnumRenderingFrame.TARGET_BODY % TARGET_BODY, CAMERA, CUSTOM_FRAME
+                kwargs.dRenderFrameOrigin               (3,1)    double {mustBeNumeric} = zeros(3,1) %TODO (PC) need to design this carefully, what if single body? Maybe, default is renderframe = 1st body, NavFrameFromRenderFrame = eye(3)
+                kwargs.dDCM_RenderFrameFromRenderFrame  (3,3)    double {mustBeNumeric} = eye(3)
+                kwargs.bConvertCamQuatToBlenderQuat     (1,1)    logical = false;
+                kwargs.bAutomaticConvertToTargetFixed   (1,1)    logical = false;
             end
             % Method to compose scene data vector (PQ data). Input attitude matrices are the matrices that
             % project a vector A_OF in OF frame onto the basis composing NavFrame reference frame.
@@ -1425,11 +1426,11 @@ classdef BlenderPyCommManager < CommManager
         % TODO (PC) complete methods for conversions
         function [dBlenderQuat_AfromB, dBlenderDCM_AfromB] = convertNonBlenderDCMtoBlenderQuat(dNonBlenderDCM_AfromB)
             arguments (Input)
-                dNonBlenderDCM_AfromB (3,3,:) double {ismatrix, mustBeNumeric}
+                dNonBlenderDCM_AfromB (3,3,:) double {mustBeNumeric}
             end
             arguments (Output)
-                dBlenderQuat_AfromB (3,:) double {ismatrix,mustBeNumeric} % TODO (PC) specify convertion in the documentation
-                dBlenderDCM_AfromB (3,3,:) double {ismatrix,mustBeNumeric}
+                dBlenderQuat_AfromB (3,:) double {mustBeNumeric} % TODO (PC) specify convertion in the documentation
+                dBlenderDCM_AfromB (3,3,:) double {mustBeNumeric}
             end
             
             % Get number of matrices to convert
@@ -1446,7 +1447,7 @@ classdef BlenderPyCommManager < CommManager
         
         function [dBlenderQuat_AfromB] = convertDCM2BlenderQuat(dDCM_AfromB)
             arguments
-                dDCM_AfromB (3,3,:) double {ismatrix,mustBeNumeric}
+                dDCM_AfromB (3,3,:) double {mustBeNumeric}
             end
             
             % Get number of conversion to be done
@@ -1470,7 +1471,7 @@ classdef BlenderPyCommManager < CommManager
         
         function [dBlenderCamDCM_AfromB] = convertNonBlenderCamDCMtoBlenderCamDCM(dNonBlenderCamDCM_AfromB)
             arguments
-                dNonBlenderCamDCM_AfromB (3,3,:) double {ismatrix,mustBeNumeric}
+                dNonBlenderCamDCM_AfromB (3,3,:) double {mustBeNumeric}
             end
             
             % Allocate output
@@ -1496,7 +1497,7 @@ classdef BlenderPyCommManager < CommManager
         
         function [dNonBlenderDCM_AfromB] = convertBlenderDCMtoNonBlenderDCM(dBlenderDCM_AfromB)
             arguments
-                dBlenderDCM_AfromB (3,3,:) double {ismatrix,mustBeNumeric}
+                dBlenderDCM_AfromB (3,3,:) double {mustBeNumeric}
             end
             
             % Allocate output
@@ -1513,7 +1514,7 @@ classdef BlenderPyCommManager < CommManager
         % Static method to convert camera quaternion to blender camera quaternion (inverse Z axis)
         function [dCameraBlendQuatArray] = convertCamQuatToBlenderQuatStatic(dCameraQuaternionArray)
             arguments
-                dCameraQuaternionArray (4,:) double {ismatrix, mustBeNumeric}
+                dCameraQuaternionArray (4,:) double {mustBeNumeric}
             end
             
             dCameraBlendQuatArray = zeros(size(dCameraQuaternionArray));
@@ -1531,7 +1532,7 @@ classdef BlenderPyCommManager < CommManager
         % Static method to convert blender camera quaternion to camera quaternion (normal Z axis)
         function [dCameraQuaternionArray] = convertBlenderQuatToCamQuatStatic(dCameraBlendQuatArray)
             arguments
-                dCameraBlendQuatArray (4,:) double {ismatrix, mustBeNumeric}
+                dCameraBlendQuatArray (4,:) double {mustBeNumeric}
             end
             
             dCameraQuaternionArray = zeros(size(dCameraBlendQuatArray));
@@ -1544,9 +1545,9 @@ classdef BlenderPyCommManager < CommManager
         % TODO (PC) make this function generic. Currently only for Milani NavCam!
         function dImg = unpackImageFromCORTO_Static(dImgBuffer, bApplyBayerFilter, bIsImageRGB)
             arguments
-                dImgBuffer          (:,1) double {isvector, mustBeNumeric, isa(dImgBuffer, 'double')}
-                bApplyBayerFilter   (1,1) logical {islogical, isscalar} = false;
-                bIsImageRGB         (1,1) logical {islogical, isscalar} = false;
+                dImgBuffer          (:,1) double {mustBeNumeric, mustBeA(dImgBuffer, 'double')}
+                bApplyBayerFilter   (1,1) logical  = false;
+                bIsImageRGB         (1,1) logical  = false;
             end
             
             if bIsImageRGB
@@ -1582,12 +1583,12 @@ classdef BlenderPyCommManager < CommManager
                 dBodiesAttDCM_RenderFrameFromOF, ...
                 ui32TargetBodyID)
             arguments
-                dSunVector_RenderFrame             (3,1)   double {isvector, mustBeNumeric}
-                dCameraOrigin_RenderFrame          (3,1)   double {isvector, mustBeNumeric}
-                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {ismatrix, mustBeNumeric}
-                dBodiesOrigin_RenderFrame          (3,:)   double {ismatrix, mustBeNumeric}
-                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {ismatrix, mustBeNumeric}
-                ui32TargetBodyID                (1,1) uint32 {isscalar, mustBeNumeric} = 1
+                dSunVector_RenderFrame             (3,1)   double {mustBeNumeric}
+                dCameraOrigin_RenderFrame          (3,1)   double {mustBeNumeric}
+                dCameraAttDCM_RenderFrameFromOF    (3,3)   double {mustBeNumeric}
+                dBodiesOrigin_RenderFrame          (3,:)   double {mustBeNumeric}
+                dBodiesAttDCM_RenderFrameFromOF    (3,3,:) double {mustBeNumeric}
+                ui32TargetBodyID                (1,1) uint32 {mustBeNumeric} = 1
             end
             
             assert(size(dBodiesOrigin_RenderFrame,2) <= ui32TargetBodyID && ui32TargetBodyID > 0, 'Invalid target body index!')
@@ -1620,7 +1621,7 @@ classdef BlenderPyCommManager < CommManager
         
         function [dSunBlenderQuat_OFfromNavFrame, dSunDCM_OFfromNavFrame] = computeSunBlenderQuatFromPosition(dSunPositionArray_RenderFrame)
             arguments
-                dSunPositionArray_RenderFrame (3,:) double {isvector, mustBeNumeric}
+                dSunPositionArray_RenderFrame (3,:) double {mustBeNumeric}
             end
             % Function to construct quaternion determining Sun direction as required by Blender, from position
             % NOTE: quaternion must be the one corresponding to the DCM from NavFrame (World) to "Sun frame"
@@ -1747,8 +1748,8 @@ classdef BlenderPyCommManager < CommManager
                 charBlenderModelPath                            string {mustBeA(charBlenderModelPath             , ["string", "char"])}
                 charBlenderPyInterfacePath                      string {mustBeA(charBlenderPyInterfacePath       , ["string", "char"])}
                 charStartBlenderServerCallerPath                string {mustBeA(charStartBlenderServerCallerPath , ["string", "char"])}
-                ui32ServerPort                                  (1,1)   uint32 {mustBeNumeric, isscalar}
-                bUseTmuxShell                                   (1,1)   logical {islogical, isscalar} = true
+                ui32ServerPort                                  (1,1)   uint32 {mustBeNumeric}
+                bUseTmuxShell                                   (1,1)   logical  = true
             end
             
             % Method to compose command to manually start blender server with provided paths
