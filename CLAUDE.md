@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Code Organization
 
-```
+```bash
 src/                        - Main source (add this to MATLAB path)
   CommManager.m             - Base class (handle); wraps tcpclient/udpport
   BlenderPyCommManager.m    - Subclass for BlenderPy renderer interface
