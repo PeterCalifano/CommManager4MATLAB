@@ -51,39 +51,39 @@ classdef CommManager < handle
     
     properties (SetAccess = protected, GetAccess = public)
         % CONFIGURATION data members
-        bDefaultConstructed     logical = true;
-        charConfigYamlFilename = ""
-        strConfigFromYaml       {isstruct} = struct()
+        bDefaultConstructed    (1,1) logical = true;
+        charConfigYamlFilename (1,:) char {mustBeText} = ""
+        strConfigFromYaml      (1,1) struct = struct()
 
-        bDEBUG_MODE
-        charServerAddress
-        ui32ServerPort          {mustBeNumeric}
-        dCommTimeout
-        enumCommMode
-        ui8CommMode = 0; % TODO (PC) check if still needed by subclasses
-        bCommManagerReady       = false;
-        bLittleEndianOrdering   = true;
-        charByteOrdering        = "little-ending";
+        bDEBUG_MODE             (1,1) logical = false
+        charServerAddress       (1,:) char {mustBeText} = ""
+        ui32ServerPort          uint32 {mustBeNumeric}
+        dCommTimeout            (1,1) double = 300.0
+        enumCommMode            EnumCommMode {mustBeA(enumCommMode, ["EnumCommMode", "string"])} = "TCP"
+        ui8CommMode             (1,1) uint8 = 0; % TODO (PC) check if still needed by subclasses
+        bCommManagerReady       (1,1) logical = false;
+        bLittleEndianOrdering   (1,1) logical = true;
+        charByteOrdering        (1,:) char {mustBeMember(charByteOrdering, ["little-endian", "big-endian"])} = "little-endian";
 
-        charTargetAddress = "127.0.0.1"
-        ui32TargetPort = 0
-        i64RecvTCPsize = int64(-1);
+        charTargetAddress       (1,:) char {mustBeText} = "127.0.0.1"
+        ui32TargetPort          (1,1) uint32 {mustBeNumeric} = 0
+        i64RecvTCPsize          (1,1) int64 = int64(-1);
 
         % Serializers options (TODO: modify, these do nothing for now)
         bUSE_PYTHON_PROTO = true;
-        bUSE_CPP_PROTO = false;
+        bUSE_CPP_PROTO    = false;
 
         % Buffers
         recvDataBuffer = 0;
-        bufferToWrite = 0;
-        recvDataStruct = struct();
-        dataStructToWrite = struct();
+        bufferToWrite  = 0;
+        recvDataStruct      (1,1) struct = struct();
+        dataStructToWrite   (1,1) struct = struct();
 
         % MATLAB objects to handle connection
         objTCPclient
         objUDPport
 
-        dOutputDatagramSize = 512; % Default size
+        ui64OutputDatagramSize (1,1) uint64 {mustBePositive} = 512; % Default size
     end
     
     %% PUBLIC METHODS
@@ -91,21 +91,21 @@ classdef CommManager < handle
         % CONSTRUCTOR
         function self = CommManager(charServerAddress, ui32ServerPort, dCommTimeout, kwargs)
             arguments
-                charServerAddress (1,:) string          {ischar, isstring}    = ""
-                ui32ServerPort    (1,:) uint32          {isvector, mustBeNumeric} = 0
-                dCommTimeout      (1,1) double          {isscalar, mustBeNumeric} = 20     
+                charServerAddress (1,:) string {mustBeText}    = ""
+                ui32ServerPort    (1,:) uint32 {mustBeNumeric} = 0
+                dCommTimeout      (1,1) double {mustBeNumeric} = 300.0
             end
             
             arguments
-                kwargs.bUSE_PYTHON_PROTO        (1,1) logical       {islogical, isscalar} = true
-                kwargs.bUSE_CPP_PROTO           (1,1) logical       {islogical, isscalar} = false
-                kwargs.bInitInPlace             (1,1) logical       {islogical, isscalar} = false
-                kwargs.enumCommMode             (1,1) EnumCommMode  {isa(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.TCP
-                kwargs.bLittleEndianOrdering    (1,1) logical       {islogical, isscalar} = true;
-                kwargs.dOutputDatagramSize      (1,1) double        {isscalar, mustBeNumeric} = 512     
-                kwargs.ui32TargetPort           (1,1) uint32        {isscalar, mustBeNumeric} = 0
-                kwargs.charTargetAddress        (1,:) string        {isscalar} = "127.0.0.1"
-                kwargs.i64RecvTCPsize           (1,1) int64         {isscalar, mustBeNumeric} = -1; 
+                kwargs.bUSE_PYTHON_PROTO        (1,1) logical       = true
+                kwargs.bUSE_CPP_PROTO           (1,1) logical       = false
+                kwargs.bInitInPlace             (1,1) logical       = false
+                kwargs.enumCommMode             (1,1) EnumCommMode  {mustBeA(kwargs.enumCommMode, 'EnumCommMode')} = EnumCommMode.TCP
+                kwargs.bLittleEndianOrdering    (1,1) logical       = true;
+                kwargs.dOutputDatagramSize      (1,1) double        {mustBeNumeric} = 512     
+                kwargs.ui32TargetPort           (1,1) uint32        {mustBeNumeric} = 0
+                kwargs.charTargetAddress        (1,:) string        {mustBeText} = "127.0.0.1"
+                kwargs.i64RecvTCPsize           (1,1) int64         {mustBeNumeric} = -1; 
             end
             
             fprintf('\nCreating communication manager object... \n')
@@ -129,7 +129,7 @@ classdef CommManager < handle
             % Assign server properties
             self.bUSE_PYTHON_PROTO      = kwargs.bUSE_PYTHON_PROTO;
             self.bUSE_CPP_PROTO         = kwargs.bUSE_CPP_PROTO;
-            self.dOutputDatagramSize    = kwargs.dOutputDatagramSize;
+            self.ui64OutputDatagramSize = kwargs.dOutputDatagramSize;
             self.enumCommMode           = kwargs.enumCommMode;
 
             self.bLittleEndianOrdering = kwargs.bLittleEndianOrdering;
@@ -144,7 +144,7 @@ classdef CommManager < handle
             end
 
             % Set packet size for UDP
-            self.dOutputDatagramSize = kwargs.dOutputDatagramSize;
+            self.ui64OutputDatagramSize = kwargs.dOutputDatagramSize;
 
             if kwargs.bInitInPlace
                 fprintf("\tInstantiation of CommManager completed. Attempting to open communication...\n")
@@ -186,7 +186,7 @@ classdef CommManager < handle
                                               "LocalHost", self.charServerAddress, ...
                                               "ByteOrder", self.charByteOrdering, ...
                                               "Timeout", self.dCommTimeout, ...
-                                              "OutputDatagramSize", self.dOutputDatagramSize);                    % TODO (PC)
+                                              "OutputDatagramSize", double(self.ui64OutputDatagramSize)); % TODO (PC)
 
                 case EnumCommMode.UDP_TCP
                     % UDP-TCP communication (2 objects)                    
@@ -201,7 +201,7 @@ classdef CommManager < handle
                                               "LocalHost", self.charServerAddress, ...
                                               "ByteOrder", self.charByteOrdering, ...
                                               "Timeout", self.dCommTimeout, ...
-                                              "OutputDatagramSize", self.dOutputDatagramSize);
+                                              "OutputDatagramSize", double(self.ui64OutputDatagramSize));
                     
                     % TCP client
                     fprintf('\tTCP client object at HOST: %s - PORT: %s \n', self.charServerAddress, num2str(self.ui32ServerPort(1)));
@@ -224,10 +224,10 @@ classdef CommManager < handle
         function writtenBytes = WriteBuffer(self, dataBuffer, bAddDataSize, ui32TargetPort, charTargetAddress)
             arguments
                 self                (1,1)
-                dataBuffer          (1,:) uint8   {isvector, isa(dataBuffer, 'uint8')}
-                bAddDataSize        (1,1) logical {islogical, isscalar}     = false
-                ui32TargetPort      (1,1) uint32  {mustBeNumeric, isscalar}     = 0
-                charTargetAddress   (1,:) string  {isvector}                = "127.0.0.1"
+                dataBuffer          (1,:) uint8   {mustBeA(dataBuffer, 'uint8')}
+                bAddDataSize        (1,1) logical = false
+                ui32TargetPort      (1,1) uint32  {mustBeNumeric} = 0
+                charTargetAddress   (1,:) string  {mustBeText}    = "127.0.0.1"
             end
             
             self.assertInit();
