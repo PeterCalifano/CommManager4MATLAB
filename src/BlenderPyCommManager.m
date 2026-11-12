@@ -3,6 +3,9 @@ classdef BlenderPyCommManager < CommManager
     % BlenderPyCommManager extends CommManager to interface with Blender via Python. It automates server startup,
     % manages YAML configuration for camera and rendering, and converts scene data into a format suitable for
     % Blender rendering.
+    % The camera object stores ImageSize as [H,W] and dFovHW as [vertical, horizontal]. The Blender YAML uses
+    % X (horizontal) and Y (vertical). Blender sends interleaved RGBA scanlines from bottom to top, also for an
+    % RGB camera, so the receive buffer counts 4 channels while the camera keeps 3.
     % -------------------------------------------------------------------------------------------------------------
     %% CHANGELOG
     % 13-01-2025    Pietro Califano     First prototype implementation deriving from CommManager.
@@ -19,6 +22,7 @@ classdef BlenderPyCommManager < CommManager
     % 06-06-2025    Pietro Califano     Update code to configure server yaml with camera params from input
     % 08-07-2025    Pietro Califano     Fix minor issues for debug mode
     % 17-11-2025    Pietro Califano     Improvement for server management and PID detection
+    % 18-10-2026    Pietro Califano, Codex GPT-6.1     Map [H,W] camera fields to Blender XY and keep an explicit camera.
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
@@ -238,11 +242,11 @@ classdef BlenderPyCommManager < CommManager
                         self.strConfigFromYaml.RenderingEngine_params.bSaveGeomVisibilityBoolMask  = settings.bSaveGeomVisibilityBoolMask;
                         
                         if not(kwargs.objCameraIntrisincs.bDefaultConstructed)
-                            % Write camera parameters
-                            self.strConfigFromYaml.Camera_params.FOV_x = rad2deg(self.objCameraIntrinsics.dFovHW(1));
-                            self.strConfigFromYaml.Camera_params.FOV_y = rad2deg(self.objCameraIntrinsics.dFovHW(2));
-                            self.strConfigFromYaml.Camera_params.sensor_size_x = self.objCameraIntrinsics.ImageSize(1);
-                            self.strConfigFromYaml.Camera_params.sensor_size_y = self.objCameraIntrinsics.ImageSize(2);
+                            % Write horizontal values to X and vertical values to Y.
+                            self.strConfigFromYaml.Camera_params.FOV_x = rad2deg(self.objCameraIntrinsics.dFovHW(2));
+                            self.strConfigFromYaml.Camera_params.FOV_y = rad2deg(self.objCameraIntrinsics.dFovHW(1));
+                            self.strConfigFromYaml.Camera_params.sensor_size_x = self.objCameraIntrinsics.ImageSize(2);
+                            self.strConfigFromYaml.Camera_params.sensor_size_y = self.objCameraIntrinsics.ImageSize(1);
                             self.strConfigFromYaml.Camera_params.n_channels = self.objCameraIntrinsics.ui32NumOfChannels;
                             self.strConfigFromYaml.Camera_params.compression = 100;
                             
@@ -309,8 +313,9 @@ classdef BlenderPyCommManager < CommManager
             end
             
             % Load camera data from object, yaml config or default data (Milani NavCam)
-            % Input object overrides all (reload if written)
-            if not(strcmpi(kwargs.charConfigYamlFilename, ""))
+            % Keep the explicit camera object, including calibration and detector metadata.
+            if kwargs.objCameraIntrisincs.bDefaultConstructed && ...
+                    not(strcmpi(kwargs.charConfigYamlFilename, ""))
                 fprintf('\nCamera parameters initialized from yaml configuration file.\n')
                 % Get params from file
                 
@@ -321,7 +326,7 @@ classdef BlenderPyCommManager < CommManager
                 dSensor_size_y      = self.strConfigFromYaml.Camera_params.sensor_size_y; % [px] Vertical resolution
                 ui32NumOfChannels   = self.strConfigFromYaml.Camera_params.n_channels;
                 
-                dPrincipalPoint_uv = [dSensor_size_x, dSensor_size_y]./2;
+                dPrincipalPoint_uv = ([dSensor_size_x, dSensor_size_y] + 1)./2;
                 
                 % TODO: add assert on rounding! Must be integer
                 
@@ -333,10 +338,11 @@ classdef BlenderPyCommManager < CommManager
                 end
                 
                 % Construct camera intrinsics object
-                self.objCameraIntrinsics = CCameraIntrinsics( dFocalLength_uv, dPrincipalPoint_uv, [dSensor_size_x, dSensor_size_y], ui32NumOfChannels );
+                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv, dPrincipalPoint_uv, ...
+                    [dSensor_size_y, dSensor_size_x], ui32NumOfChannels);
                 
                 
-            else
+            elseif kwargs.objCameraIntrisincs.bDefaultConstructed
                 % Assume Milani/RCS-1 NavCam parameters
                 warning('No camera object nor yaml configuration file specified. Assuming Milani NavCam parameters.')
                 
@@ -346,11 +352,12 @@ classdef BlenderPyCommManager < CommManager
                 dSensor_size_y = 1536;
                 ui32NumOfChannels = uint32(4); % RGBA
                 
-                ui32ImageSize = [dSensor_size_x; dSensor_size_y];
-                dFocalLength_uv = CCameraIntrinsics.computeFocalLenghInPix([dFOV_x; dFOV_y], ui32ImageSize, "deg");
-                dPrincipalPoint = double(ui32ImageSize)/2;
+                dImageSizeXY = [dSensor_size_x; dSensor_size_y];
+                dFocalLength_uv = CCameraIntrinsics.computeFocalLenghInPix([dFOV_x; dFOV_y], dImageSizeXY, "deg");
+                dPrincipalPoint = (dImageSizeXY.' + 1)/2;
                 
-                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv, dPrincipalPoint, ui32ImageSize, ui32NumOfChannels);
+                self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv.', dPrincipalPoint, ...
+                    dImageSizeXY([2,1]).', ui32NumOfChannels);
                 
                 dMSG_ENTRY_BYTES_SIZE = 8;
                 self.enumCommDataType = EnumCommDataType.DOUBLE;
@@ -362,8 +369,12 @@ classdef BlenderPyCommManager < CommManager
             % Auto compute TCP message recv size from camera data if available
             if self.i64RecvTCPsize == -10
                 
-                % Compute recv TCP buffer size
-                dAutoComputedRecvTCPsize = (self.objCameraIntrinsics.ui32NumOfChannels * ...
+                % Size the buffer for 4 channels for an RGB camera: Blender also sends alpha.
+                ui32WireNumOfChannels = self.objCameraIntrinsics.ui32NumOfChannels;
+                if ui32WireNumOfChannels == 3
+                    ui32WireNumOfChannels = uint32(4);
+                end
+                dAutoComputedRecvTCPsize = (ui32WireNumOfChannels * ...
                     self.objCameraIntrinsics.ImageSize(2) * ...
                     self.objCameraIntrinsics.ImageSize(1) * ...
                     dMSG_ENTRY_BYTES_SIZE);
@@ -430,10 +441,10 @@ classdef BlenderPyCommManager < CommManager
             fprintf(" - Focal length: [%.2f, %.2f] [mm or px] (X, Y)\n", objCameraIntrinsics.FocalLength(1), objCameraIntrinsics.FocalLength(2));
             
             % Field of View (FoV)
-            fprintf(" - Field of View (FoV): [%.2f, %.2f] degrees (X, Y)\n", rad2deg(objCameraIntrinsics.dFovHW(1)), rad2deg(objCameraIntrinsics.dFovHW(2)));
+            fprintf(" - Field of View (FoV): [%.2f, %.2f] degrees (X, Y)\n", rad2deg(objCameraIntrinsics.dFovHW(2)), rad2deg(objCameraIntrinsics.dFovHW(1)));
             
             % Image Size
-            fprintf(" - Image size: [%d, %d] pixels (Width X, Height Y)\n", objCameraIntrinsics.ImageSize(1), objCameraIntrinsics.ImageSize(2));
+            fprintf(" - Image size: [%d, %d] pixels (Width X, Height Y)\n", objCameraIntrinsics.ImageSize(2), objCameraIntrinsics.ImageSize(1));
             
             % Image Type
             if objCameraIntrinsics.ui32NumOfChannels == 3 || objCameraIntrinsics.ui32NumOfChannels == 4
@@ -1012,7 +1023,7 @@ classdef BlenderPyCommManager < CommManager
             % dImgRGB = unpackImageFromCORTO(dImgBuffer, bApplyBayerFilter)
             % -------------------------------------------------------------------------------------------------------------
             %% DESCRIPTION
-            % What the function does
+            % Decode interleaved RGBA scanlines, sent from bottom to top, into an [H,W,3] double image.
             % -------------------------------------------------------------------------------------------------------------
             %% INPUT
             % dImgBuffer          (:,1) double {isvector, mustBeNumeric, isa(dImgBuffer, 'double')}
@@ -1024,10 +1035,11 @@ classdef BlenderPyCommManager < CommManager
             %% CHANGELOG
             % First author: Milani GNC Team (M. Pugliatti, A. Rizza, F. Piccolo) for milani-gnc prototype
             % 13-01-2025    Pietro Califano     Adapted from legacy code of milani-gnc
+            % 18-10-2026    Pietro Califano, Codex GPT-6.1     Read height and width from [H,W] ImageSize.
             % -------------------------------------------------------------------------------------------------------------
             
-            ui32ImgHeight   = self.objCameraIntrinsics.ImageSize(2);
-            ui32ImgWidth    = self.objCameraIntrinsics.ImageSize(1);
+            ui32ImgHeight   = self.objCameraIntrinsics.ImageSize(1);
+            ui32ImgWidth    = self.objCameraIntrinsics.ImageSize(2);
             
             dImgRGB = zeros(ui32ImgHeight, ui32ImgWidth, 3, 'double');
             
@@ -1064,7 +1076,7 @@ classdef BlenderPyCommManager < CommManager
             % This function convert the RGB image of the environment into one generted
             % by the Milani NavCam with a 'bgrr' pattern
             
-            dImgBayer = zeros(self.objCameraIntrinsics.ImageSize(2), self.objCameraIntrinsics.ImageSize(1));
+            dImgBayer = zeros(self.objCameraIntrinsics.ImageSize(1), self.objCameraIntrinsics.ImageSize(2));
             
             % Generate the pattern of the bayer filter
             dBayerFilter = BlenderPyCommManager.createBayerFilter_(dImgBayer, 'bggr'); % NOTE (PC) remove this coding horror...
