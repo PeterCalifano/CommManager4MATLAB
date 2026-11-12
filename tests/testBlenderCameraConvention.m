@@ -16,6 +16,8 @@ function objTests = testBlenderCameraConvention()
 %% CHANGELOG
 % 18-10-2026  Pietro Califano, Codex GPT-6.1  Cover camera ordering and unchanged wire orientation.
 % 12-11-2026  Pietro Califano, Claude Opus 5.5  Readability pass; drop default-value assertions.
+% 12-11-2026  Pietro Califano, Claude Opus 5.5  Cover an unset YAML data type and a passed data type
+%                                               with the default camera.
 % -------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BlenderPyCommManager, CCameraIntrinsics, CServerFreeBlenderPyCommManager, yaml.
@@ -47,7 +49,7 @@ end
 
 function testYamlXYCameraLoadsAsMatlabHW(objTestCase)
 % Construct the manager from a Blender XY configuration only.
-charYaml = MakeYaml_(objTestCase);
+charYaml = MakeYaml_(objTestCase, 'double');
 charBefore = fileread(charYaml);
 objManager = MakeManager_(objTestCase, 'charConfigYamlFilename', string(charYaml));
 objCamera = objManager.objCameraIntrinsics;
@@ -65,7 +67,7 @@ end
 
 function testExplicitCameraOverridesYamlWithoutReconstruction(objTestCase)
 % Construct the manager from both a configuration and an explicit camera.
-charYaml = MakeYaml_(objTestCase);
+charYaml = MakeYaml_(objTestCase, 'double');
 objCamera = CCameraIntrinsics([7, 11], [2.75, 1.75], [4, 6], uint32(4));
 objManager = MakeManager_(objTestCase, ...
     'charConfigYamlFilename', string(charYaml), ...
@@ -77,7 +79,7 @@ end
 
 function testYamlWritesWidthHeightAndHorizontalVerticalFov(objTestCase)
 % Construct the manager so that it rewrites the configuration from an explicit camera.
-charYaml = MakeYaml_(objTestCase);
+charYaml = MakeYaml_(objTestCase, 'double');
 objCamera = CCameraIntrinsics([7, 11], [3.5, 2.5], [4, 6], uint32(4));
 objManager = MakeManager_(objTestCase, ...
     'charConfigYamlFilename', string(charYaml), ...
@@ -95,7 +97,7 @@ end
 
 function testExplicitRgbCameraUsesRgbaWireBudget(objTestCase)
 % Construct the manager from a configuration and an explicit RGB camera.
-charYaml = MakeYaml_(objTestCase);
+charYaml = MakeYaml_(objTestCase, 'double');
 objCamera = CCameraIntrinsics([7, 11], [2.75, 1.75], [4, 6], uint32(3));
 objManager = MakeManager_(objTestCase, ...
     'charConfigYamlFilename', string(charYaml), ...
@@ -123,6 +125,30 @@ objManager = MakeManager_(objTestCase, ...
 % Expect the camera unchanged and a receive buffer sized for RGBA doubles.
 VerifyCamera_(objTestCase, objManager.objCameraIntrinsics, objCamera);
 verifyEqual(objTestCase, objManager.i64RecvTCPsize, int64(4*6*4*8));
+end
+
+function testYamlUnsetDataTypeUsesDoubleBudget(objTestCase)
+% Construct the manager from a configuration whose image data type is unset.
+charYaml = MakeYaml_(objTestCase, 'unset');
+objManager = MakeManager_(objTestCase, ...
+    'charConfigYamlFilename', string(charYaml), ...
+    'i64RecvTCPsize', int64(-10));
+
+% Expect the double fallback and a receive buffer sized for RGBA doubles.
+verifyEqual(objTestCase, objManager.enumCommDataType, EnumCommDataType.DOUBLE);
+verifyEqual(objTestCase, objManager.i64RecvTCPsize, int64(4*6*4*8));
+end
+
+function testDefaultCameraKeepsPassedDataType(objTestCase)
+% Construct the manager without camera and YAML, with an explicit 8-bit data type.
+objManager = MakeManager_(objTestCase, ...
+    'enumCommDataType', EnumCommDataType.UINT8, ...
+    'i64RecvTCPsize', int64(-10));
+
+% Expect the passed data type and one byte per RGBA entry of the fallback camera.
+dNumOfPixels = prod(double(objManager.objCameraIntrinsics.ImageSize));
+verifyEqual(objTestCase, objManager.enumCommDataType, EnumCommDataType.UINT8);
+verifyEqual(objTestCase, objManager.i64RecvTCPsize, int64(dNumOfPixels*4*1));
 end
 
 function testRgbWireOrientationAndChannelsArePreserved(objTestCase)
@@ -226,27 +252,30 @@ verifyEqual(objTestCase, objActual.dFovHW, objExpected.dFovHW);
 verifyEqual(objTestCase, objActual.ui32NumOfChannels, objExpected.ui32NumOfChannels);
 end
 
-function charYaml = MakeYaml_(objTestCase)
+function charYaml = MakeYaml_(objTestCase, charImageDtype)
 %% SIGNATURE
-% charYaml = MakeYaml_(objTestCase)
+% charYaml = MakeYaml_(objTestCase, charImageDtype)
 % -------------------------------------------------------------------------------------------------
 %% DESCRIPTION
 % Write a disposable Blender XY camera configuration: 6 px wide, 4 px high, 76 deg by 42 deg FoV.
 % -------------------------------------------------------------------------------------------------
 %% INPUT
-% objTestCase    MATLAB test case owning folder cleanup.
+% objTestCase       MATLAB test case owning folder cleanup.
+% charImageDtype    Server image data type, for example 'double' or 'unset'.
 % -------------------------------------------------------------------------------------------------
 %% OUTPUT
-% charYaml       Configuration file path.
+% charYaml          Configuration file path.
 % -------------------------------------------------------------------------------------------------
 %% CHANGELOG
 % 18-10-2026  Pietro Califano, Codex GPT-6.1  Supply asymmetric camera fields without assets.
+% 12-11-2026  Pietro Califano, Claude Opus 5.5  Take the image data type as an input.
 % -------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % yaml.dumpFile.
 % -------------------------------------------------------------------------------------------------
 arguments (Input)
     objTestCase (1,1) matlab.unittest.TestCase
+    charImageDtype (1,:) char
 end
 arguments (Output)
     charYaml (1,:) char
@@ -263,7 +292,7 @@ charYaml = fullfile(charFolder, 'camera.yml');
 strConfig = struct( ...
     'Server_params', struct( ...
         'output_path', charFolder, ...
-        'image_dtype', 'double'), ...
+        'image_dtype', charImageDtype), ...
     'Camera_params', struct( ...
         'sensor_size_x', 6, ...
         'sensor_size_y', 4, ...

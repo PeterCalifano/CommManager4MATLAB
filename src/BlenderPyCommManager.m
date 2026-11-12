@@ -23,6 +23,8 @@ classdef BlenderPyCommManager < CommManager
     % 08-07-2025    Pietro Califano     Fix minor issues for debug mode
     % 17-11-2025    Pietro Califano     Improvement for server management and PID detection
     % 18-10-2026    Pietro Califano, Codex GPT-6.1     Map [H,W] camera fields to Blender XY and keep an explicit camera.
+    % 12-11-2026    Pietro Califano, Claude Opus 5.5     Set the byte size for an unset data type; keep a passed
+    %                                                    data type with the default Milani camera.
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
@@ -308,7 +310,8 @@ classdef BlenderPyCommManager < CommManager
                         
                     case "UNSET"
                         warning('Unset message entry datatype: assuming double by default (8 bytes per entry).')
-                        self.enumCommDataType = "DOUBLE";
+                        self.enumCommDataType = EnumCommDataType.DOUBLE;
+                        dMSG_ENTRY_BYTES_SIZE = 8;
                 end
             end
             
@@ -358,10 +361,9 @@ classdef BlenderPyCommManager < CommManager
                 
                 self.objCameraIntrinsics = CCameraIntrinsics(dFocalLength_uv.', dPrincipalPoint, ...
                     dImageSizeXY([2,1]).', ui32NumOfChannels);
-                
-                dMSG_ENTRY_BYTES_SIZE = 8;
-                self.enumCommDataType = EnumCommDataType.DOUBLE;
-                
+
+                % Keep the data type selected above: a passed data type or the double default.
+
                 % Assign TCP recv size (fixed in Milani/RCS-1 case
                 % self.i64RecvTCPsize = int64(4 * 2048 * 1536 * dBYTES_IN_DOUBLE);
             end
