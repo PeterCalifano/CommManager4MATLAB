@@ -25,6 +25,8 @@ classdef BlenderPyCommManager < CommManager
     % 18-10-2026    Pietro Califano, Codex GPT-6.1     Map [H,W] camera fields to Blender XY and keep an explicit camera.
     % 12-11-2026    Pietro Califano, Claude Opus 5.5     Set the byte size for an unset data type; keep a passed
     %                                                    data type with the default Milani camera.
+    % 12-11-2026    Pietro Califano, Claude Opus 5.5     Warn when an explicit camera has an off-centre principal
+    %                                                    point, which Blender cannot render.
     % -------------------------------------------------------------------------------------------------------------
     %% DEPENDENCIES
     % Functions and classes in SimulationGears_for_SpaceNav repository. Specifically, CCameraIntrinsics.
@@ -175,6 +177,16 @@ classdef BlenderPyCommManager < CommManager
             if not(kwargs.objCameraIntrisincs.bDefaultConstructed)
                 fprintf('\nCamera parameters initialized from input object.\n')
                 self.objCameraIntrinsics = kwargs.objCameraIntrisincs;
+
+                % Warn when the principal point is off the image centre: the Blender configuration cannot shift it.
+                dPrincipalPoint_uv = reshape(double(self.objCameraIntrinsics.PrincipalPoint), 1, 2);
+                dImageCentre_uv = (reshape(double(self.objCameraIntrinsics.ImageSize([2,1])), 1, 2) + 1)/2;
+                if any(abs(dPrincipalPoint_uv - dImageCentre_uv) > 1e-9)
+                    warning('BlenderPyCommManager:PrincipalPointOffCentre', ...
+                        ['Blender renders with the principal point at the image centre [%.4f, %.4f] px, but the ' ...
+                        'camera principal point is [%.4f, %.4f] px. Rendered images will not match this camera.'], ...
+                        dImageCentre_uv(1), dImageCentre_uv(2), dPrincipalPoint_uv(1), dPrincipalPoint_uv(2));
+                end
             end
             
             if not(strcmpi(kwargs.charConfigYamlFilename, ""))

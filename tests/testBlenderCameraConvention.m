@@ -18,6 +18,7 @@ function objTests = testBlenderCameraConvention()
 % 12-11-2026  Pietro Califano, Claude Opus 5.5  Readability pass; drop default-value assertions.
 % 12-11-2026  Pietro Califano, Claude Opus 5.5  Cover an unset YAML data type and a passed data type
 %                                               with the default camera.
+% 12-11-2026  Pietro Califano, Claude Opus 5.5  Cover the off-centre principal point warning.
 % -------------------------------------------------------------------------------------------------
 %% DEPENDENCIES
 % BlenderPyCommManager, CCameraIntrinsics, CServerFreeBlenderPyCommManager, yaml.
@@ -34,12 +35,14 @@ addpath(fullfile(charRoot, 'src'), fullfile(charRoot, 'tests', 'helpers'));
 end
 
 function testExplicitCameraWithoutYamlIsKept(objTestCase)
-% Construct the manager from an explicit camera and an explicit data type, without YAML.
+% Construct the manager from an explicit off-centre camera and an explicit data type, without YAML.
+% Expect the off-centre principal point warning.
 objCamera = CCameraIntrinsics([7, 11], [2.75, 1.75], [4, 6], uint32(4));
-objManager = MakeManager_(objTestCase, ...
+objManager = verifyWarning(objTestCase, @() MakeManager_(objTestCase, ...
     'objCameraIntrisincs', objCamera, ...
     'enumCommDataType', EnumCommDataType.UINT16, ...
-    'i64RecvTCPsize', int64(-10));
+    'i64RecvTCPsize', int64(-10)), ...
+    'BlenderPyCommManager:PrincipalPointOffCentre');
 
 % Expect the camera unchanged and the receive buffer sized as H*W*4 channels*2 bytes.
 VerifyCamera_(objTestCase, objManager.objCameraIntrinsics, objCamera);
@@ -66,12 +69,14 @@ verifyEqual(objTestCase, fileread(charYaml), charBefore);
 end
 
 function testExplicitCameraOverridesYamlWithoutReconstruction(objTestCase)
-% Construct the manager from both a configuration and an explicit camera.
+% Construct the manager from both a configuration and an explicit off-centre camera.
+% Expect the off-centre principal point warning.
 charYaml = MakeYaml_(objTestCase, 'double');
 objCamera = CCameraIntrinsics([7, 11], [2.75, 1.75], [4, 6], uint32(4));
-objManager = MakeManager_(objTestCase, ...
+objManager = verifyWarning(objTestCase, @() MakeManager_(objTestCase, ...
     'charConfigYamlFilename', string(charYaml), ...
-    'objCameraIntrisincs', objCamera);
+    'objCameraIntrisincs', objCamera), ...
+    'BlenderPyCommManager:PrincipalPointOffCentre');
 
 % Expect the explicit camera, including its non-centred principal point.
 VerifyCamera_(objTestCase, objManager.objCameraIntrinsics, objCamera);
@@ -98,7 +103,7 @@ end
 function testExplicitRgbCameraUsesRgbaWireBudget(objTestCase)
 % Construct the manager from a configuration and an explicit RGB camera.
 charYaml = MakeYaml_(objTestCase, 'double');
-objCamera = CCameraIntrinsics([7, 11], [2.75, 1.75], [4, 6], uint32(3));
+objCamera = CCameraIntrinsics([7, 11], [3.5, 2.5], [4, 6], uint32(3));
 objManager = MakeManager_(objTestCase, ...
     'charConfigYamlFilename', string(charYaml), ...
     'objCameraIntrisincs', objCamera, ...
@@ -116,7 +121,7 @@ end
 
 function testExplicitRgbCameraWithoutYamlUsesRgbaWireBudget(objTestCase)
 % Construct the manager from an explicit RGB camera and double transport, without YAML.
-objCamera = CCameraIntrinsics([7, 11], [2.75, 1.75], [4, 6], uint32(3));
+objCamera = CCameraIntrinsics([7, 11], [3.5, 2.5], [4, 6], uint32(3));
 objManager = MakeManager_(objTestCase, ...
     'objCameraIntrisincs', objCamera, ...
     'enumCommDataType', EnumCommDataType.DOUBLE, ...
@@ -125,6 +130,17 @@ objManager = MakeManager_(objTestCase, ...
 % Expect the camera unchanged and a receive buffer sized for RGBA doubles.
 VerifyCamera_(objTestCase, objManager.objCameraIntrinsics, objCamera);
 verifyEqual(objTestCase, objManager.i64RecvTCPsize, int64(4*6*4*8));
+end
+
+function testCentredExplicitCameraDoesNotWarn(objTestCase)
+% Construct the manager from an explicit camera with the principal point at the image centre, without YAML.
+objCamera = CCameraIntrinsics([7, 11], [3.5, 2.5], [4, 6], uint32(4));
+
+% Expect no warning: Blender renders this camera as it is.
+verifyWarningFree(objTestCase, @() MakeManager_(objTestCase, ...
+    'objCameraIntrisincs', objCamera, ...
+    'enumCommDataType', EnumCommDataType.DOUBLE, ...
+    'i64RecvTCPsize', int64(-10)));
 end
 
 function testYamlUnsetDataTypeUsesDoubleBudget(objTestCase)
